@@ -444,18 +444,22 @@ const Queue: React.FC<QueueProps> = ({ setView, onSignOut }) => {
       className="select-none"
     >
       <div className="bg-transparent w-full">
-        <div className="px-2 py-1">
-          <Toast
-            open={toastOpen}
-            onOpenChange={setToastOpen}
-            variant={toastMessage.variant}
-            duration={3000}
-          >
-            <ToastTitle>{toastMessage.title}</ToastTitle>
-            <ToastDescription>{toastMessage.description}</ToastDescription>
-          </Toast>
+        {/* Center everything in a flex container */}
+        <div className="flex flex-col items-center w-full">
+          {/* Toast positioned at the top */}
+          <div className="w-full px-2 py-1">
+            <Toast
+              open={toastOpen}
+              onOpenChange={setToastOpen}
+              variant={toastMessage.variant}
+              duration={3000}
+            >
+              <ToastTitle>{toastMessage.title}</ToastTitle>
+              <ToastDescription>{toastMessage.description}</ToastDescription>
+            </Toast>
+          </div>
 
-          {/* Main Bar with Logout Button */}
+          {/* Main Bar with Logout Button - Centered */}
           <div className="w-fit overflow-visible relative">
             <div className="flex items-center gap-2">
               <QueueCommands
@@ -509,7 +513,7 @@ const Queue: React.FC<QueueProps> = ({ setView, onSignOut }) => {
             </div>
           </div>
 
-          {/* Usage Limit Notification - Below the bar */}
+          {/* Usage Limit Notification - Centered below the bar */}
           {showUsageLimitToast && (
             <div className="mt-2 w-full max-w-md liquid-glass chat-container p-4 text-white/90 text-xs relative bg-red-500/10 border border-red-500/20">
               {/* Close Button */}
@@ -556,9 +560,10 @@ const Queue: React.FC<QueueProps> = ({ setView, onSignOut }) => {
               </button>
             </div>
           )}
-          {/* Conditional Chat Interface */}
+
+          {/* Conditional Chat Interface - Wider and centered relative to floating bar system */}
           {isChatOpen && (
-            <div className="mt-4 w-full mx-auto liquid-glass chat-container p-4 flex flex-col relative">
+            <div className="mt-4 w-full max-w-2xl liquid-glass chat-container p-4 flex flex-col relative">
               {/* Close Button */}
               <button
                 onClick={() => setIsChatOpen(false)}
@@ -668,9 +673,9 @@ const Queue: React.FC<QueueProps> = ({ setView, onSignOut }) => {
             </div>
           )}
           
-          {/* Question Panel - Two-panel layout for refined questions */}
+          {/* Question Panel - Wider and centered relative to floating bar system */}
           {(detectedQuestions.length > 0 || audioStreamState?.isListening) && (
-            <div className="mt-4">
+            <div className="mt-4 w-full max-w-2xl">
               <QuestionSidePanel
                 questions={detectedQuestions}
                 audioStreamState={audioStreamState}
@@ -682,6 +687,7 @@ const Queue: React.FC<QueueProps> = ({ setView, onSignOut }) => {
           )}
         </div>
       </div>
+
 
       <div ref={contentRef}>
         <ScreenshotQueue
