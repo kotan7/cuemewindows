@@ -48,11 +48,26 @@ export class QnAService {
     })
   }
 
+  private normalizeJapaneseText(text: string): string {
+    return text
+      // Normalize full-width to half-width numbers
+      .replace(/[０-９]/g, (match) => String.fromCharCode(match.charCodeAt(0) - 0xFEE0))
+      // Normalize full-width to half-width ASCII
+      .replace(/[Ａ-Ｚａ-ｚ]/g, (match) => String.fromCharCode(match.charCodeAt(0) - 0xFEE0))
+      // Clean up excessive whitespace
+      .replace(/\s+/g, ' ')
+      .trim()
+  }
+
   private async generateEmbedding(text: string): Promise<number[]> {
     try {
+      // Normalize Japanese text for better embedding quality (same as web version)
+      const normalizedText = this.normalizeJapaneseText(text)
+      
       const response = await this.openai.embeddings.create({
-        model: 'text-embedding-ada-002',
-        input: text.replace(/\\n/g, ' '),
+        model: 'text-embedding-3-large',
+        input: normalizedText.replace(/\n/g, ' '),
+        dimensions: 1536
       })
       
       return response.data[0].embedding

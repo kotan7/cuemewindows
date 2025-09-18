@@ -1,16 +1,21 @@
 import { GoogleGenerativeAI, GenerativeModel } from "@google/generative-ai"
 import fs from "fs"
 import { QnAService, SearchResult } from "./QnAService"
+import { DocumentService, DocumentSearchResult } from "./DocumentService"
 
 export interface RAGContext {
   hasContext: boolean
   results: SearchResult[]
+  documentChunks?: DocumentSearchResult[]
   collectionName?: string
+  documentName?: string
+  type: 'qna' | 'document'
 }
 
 export class LLMHelper {
   private model: GenerativeModel
   private qnaService: QnAService | null = null
+  private documentService: DocumentService | null = null
   private readonly systemPrompt = `あなたは面接支援AIアシスタントです。ユーザーの質問に対して、面接で直接使える形で回答してください。
 
 ## 回答の基本方針：
@@ -323,49 +328,111 @@ ${JSON.stringify(problemInfo, null, 2)}
     this.qnaService = qnaService
   }
 
+  public setDocumentService(documentService: DocumentService) {
+    this.documentService = documentService
+  }
+
   private async searchRAGContext(
     message: string, 
     collectionId?: string
   ): Promise<RAGContext> {
-    if (!this.qnaService || !collectionId) {
-      return { hasContext: false, results: [] }
+    if (!collectionId) {
+      return { hasContext: false, results: [], type: 'qna' }
     }
 
-    try {
-      // Use a lower threshold to get more potentially relevant results
-      const searchResults = await this.qnaService.findRelevantAnswers(
-        message,
-        collectionId,
-        0.6 // Lower similarity threshold for better recall
-      )
+    // Determine if this is a QNA collection or document by checking the format
+    // QNA collection IDs are UUIDs, document IDs are prefixed with 'doc_'
+    const isDocument = collectionId.startsWith('doc_')
+    
+    if (isDocument && this.documentService) {
+      // Handle document search
+      const documentId = collectionId.replace('doc_', '')
+      console.log(`[LLMHelper] Processing document search - collectionId: ${collectionId}, documentId: ${documentId}`)
+      
+      try {
+        const searchResults = await this.documentService.findRelevantChunks(
+          message,
+          documentId,
+          0.6 // Reasonable similarity threshold for better recall
+        )
 
-      // Log the search results for debugging
-      console.log(`[LLMHelper] RAG search for "${message}" found ${searchResults.answers.length} results`)
-      if (searchResults.answers.length > 0) {
-        console.log(`[LLMHelper] Best match similarity: ${searchResults.answers[0].similarity.toFixed(3)}`)
-      }
+        console.log(`[LLMHelper] Document RAG search for "${message}" found ${searchResults.chunks.length} chunks`)
+        if (searchResults.chunks.length > 0) {
+          console.log(`[LLMHelper] Best chunk similarity: ${searchResults.chunks[0].similarity.toFixed(3)}`)
+          console.log(`[LLMHelper] Best chunk preview: ${searchResults.chunks[0].chunk_text.substring(0, 100)}...`)
+        }
 
-      return {
-        hasContext: searchResults.hasRelevantAnswers,
-        results: searchResults.answers,
-        collectionName: collectionId
+        return {
+          hasContext: searchResults.hasRelevantChunks,
+          results: [], // Empty for documents
+          documentChunks: searchResults.chunks,
+          documentName: searchResults.chunks[0]?.document_name,
+          type: 'document'
+        }
+      } catch (error) {
+        console.error('[LLMHelper] Error searching document context:', error)
+        return { hasContext: false, results: [], type: 'document' }
       }
-    } catch (error) {
-      console.error('[LLMHelper] Error searching RAG context:', error)
-      return { hasContext: false, results: [] }
+    } else if (this.qnaService) {
+      // Handle QNA collection search
+      try {
+        const searchResults = await this.qnaService.findRelevantAnswers(
+          message,
+          collectionId,
+          0.6 // Reasonable similarity threshold for better recall
+        )
+
+        console.log(`[LLMHelper] QNA RAG search for "${message}" found ${searchResults.answers.length} results`)
+        if (searchResults.answers.length > 0) {
+          console.log(`[LLMHelper] Best match similarity: ${searchResults.answers[0].similarity.toFixed(3)}`)
+        }
+
+        return {
+          hasContext: searchResults.hasRelevantAnswers,
+          results: searchResults.answers,
+          collectionName: collectionId,
+          type: 'qna'
+        }
+      } catch (error) {
+        console.error('[LLMHelper] Error searching QNA context:', error)
+        return { hasContext: false, results: [], type: 'qna' }
+      }
     }
+
+    return { hasContext: false, results: [], type: 'qna' }
   }
 
   private formatRAGPrompt(message: string, ragContext: RAGContext): string {
-    if (!ragContext.hasContext || ragContext.results.length === 0) {
-      return message
+    if (!ragContext.hasContext) {
+      return `${this.systemPrompt}
+
+## ユーザーの質問：
+${message}
+
+上記の質問に対して、面接で直接使える形で回答してください。回答は簡潔で実用的にし、以下の形式で構成してください：
+
+• **要点を箇条書きで整理**
+• **具体例があれば1-2個含める**
+• **面接官に伝わりやすい表現を使用**
+
+回答は自然で話しやすい内容にしてください。`
     }
 
-    const contextInfo = ragContext.results
-      .map((result, index) => {
-        return `【関連知識 ${index + 1}】\nQ: ${result.question}\nA: ${result.answer}\n類似度: ${(result.similarity * 100).toFixed(1)}%`
-      })
-      .join('\n\n')
+    let contextInfo = ''
+    
+    if (ragContext.type === 'qna' && ragContext.results.length > 0) {
+      contextInfo = ragContext.results
+        .map((result, index) => {
+          return `【関連知識 ${index + 1}】\nQ: ${result.question}\nA: ${result.answer}\n類似度: ${(result.similarity * 100).toFixed(1)}%`
+        })
+        .join('\n\n')
+    } else if (ragContext.type === 'document' && ragContext.documentChunks && ragContext.documentChunks.length > 0) {
+      contextInfo = ragContext.documentChunks
+        .map((chunk, index) => {
+          return `【文書情報 ${index + 1}】\n内容: ${chunk.chunk_text}\n類似度: ${(chunk.similarity * 100).toFixed(1)}%`
+        })
+        .join('\n\n')
+    }
 
     return `${this.systemPrompt}
 
@@ -375,7 +442,14 @@ ${contextInfo}
 ## ユーザーの質問：
 ${message}
 
-上記の関連情報を活用して、面接で直接使える形で回答してください。情報源については言及せず、自然に内容を統合して回答してください。回答は完結で実用的にし、面接官に対して自然に話せる内容にしてください。`
+上記の関連情報を活用して、面接で直接使える形で回答してください。以下の形式で構成してください：
+
+• **核心となる回答を最初に述べる**
+• **重要なポイントを箇条書きで整理**
+• **具体例があれば1-2個含める**
+• **面接官に伝わりやすい表現を使用**
+
+情報源については言及せず、自然に内容を統合して回答してください。回答は完結で実用的にし、面接官に対して自然に話せる内容にしてください。`
   }
 
   public async chatWithRAG(

@@ -34,6 +34,7 @@ import { ShortcutsHelper } from "./shortcuts"
 import { ProcessingHelper } from "./ProcessingHelper"
 import { AuthService } from "./AuthService"
 import { QnAService } from "./QnAService"
+import { DocumentService } from "./DocumentService"
 import { UsageTracker } from "./UsageTracker"
 import { AudioStreamProcessor } from "./AudioStreamProcessor"
 
@@ -46,6 +47,7 @@ export class AppState {
   public processingHelper: ProcessingHelper
   public authService: AuthService
   public qnaService: QnAService
+  public documentService: DocumentService
   public usageTracker: UsageTracker
   public audioStreamProcessor: AudioStreamProcessor
   private tray: Tray | null = null
@@ -117,8 +119,12 @@ export class AppState {
     // Initialize QnAService with AuthService's Supabase client
     this.qnaService = new QnAService(this.authService.getSupabaseClient())
 
-    // Set QnAService in ProcessingHelper's LLMHelper
+    // Initialize DocumentService with AuthService's Supabase client
+    this.documentService = new DocumentService(this.authService.getSupabaseClient())
+
+    // Set QnAService and DocumentService in ProcessingHelper's LLMHelper
     this.processingHelper.getLLMHelper().setQnAService(this.qnaService)
+    this.processingHelper.getLLMHelper().setDocumentService(this.documentService)
 
     // Initialize AudioStreamProcessor
     const openaiApiKey = process.env.OPENAI_API_KEY

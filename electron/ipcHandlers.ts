@@ -321,6 +321,22 @@ export function initializeIpcHandlers(appState: AppState): void {
     }
   });
 
+  // Document handlers
+  ipcMain.handle("documents-get-user-documents", async () => {
+    try {
+      const user = appState.authService.getCurrentUser();
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+      return await appState.documentService.getUserDocuments(user.id);
+    } catch (error: any) {
+      console.error("Error in documents-get-user-documents handler:", error);
+      throw error;
+    }
+  });
+
+
+
   ipcMain.handle("qna-get-collection", async (event, collectionId: string) => {
     try {
       return await appState.qnaService.getCollection(collectionId);

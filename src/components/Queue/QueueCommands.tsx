@@ -9,6 +9,7 @@ import {
   Bot,
   Mic,
   MicIcon,
+  FileText,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogClose } from "../ui/dialog";
 import { DetectedQuestion, AudioStreamState } from "../../types/audio-stream";
@@ -18,6 +19,23 @@ interface QnACollection {
   name: string;
   description: string | null;
   qna_count?: number;
+}
+
+interface Document {
+  id: string;
+  display_name: string;
+  file_name: string;
+  chunk_count: number;
+  created_at: string;
+  status: string;
+}
+
+interface ContentItem {
+  id: string;
+  name: string;
+  description: string | null;
+  count: number;
+  type: 'qna' | 'document';
 }
 
 interface ResponseMode {
@@ -56,7 +74,9 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
   // Response mode dropdown state
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [collections, setCollections] = useState<QnACollection[]>([]);
-  const [collectionsLoading, setCollectionsLoading] = useState(false);
+  const [documents, setDocuments] = useState<Document[]>([]);
+  const [contentItems, setContentItems] = useState<ContentItem[]>([]);
+  const [contentLoading, setContentLoading] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [dropdownPosition, setDropdownPosition] = useState({
@@ -85,12 +105,36 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
     onTooltipVisibilityChange(isTooltipVisible, tooltipHeight);
   }, [isTooltipVisible]);
 
-  // Load collections when authenticated
+  // Load content when authenticated
   useEffect(() => {
-    if (isAuthenticated && isDropdownOpen && collections.length === 0) {
-      loadCollections();
+    if (isAuthenticated && isDropdownOpen && contentItems.length === 0) {
+      loadContent();
     }
   }, [isAuthenticated, isDropdownOpen]);
+
+  // Combine collections and documents when either changes
+  useEffect(() => {
+    const combined: ContentItem[] = [
+      ...collections.map(collection => ({
+        id: collection.id,
+        name: collection.name,
+        description: collection.description,
+        count: collection.qna_count || 0,
+        type: 'qna' as const
+      })),
+      ...documents.map(document => ({
+        id: `doc_${document.id}`, // Prefix with 'doc_' to distinguish from QNA
+        name: document.display_name || document.file_name,
+        description: `${document.chunk_count} chunks`,
+        count: document.chunk_count,
+        type: 'document' as const
+      }))
+    ];
+
+    // Sort by name
+    combined.sort((a, b) => a.name.localeCompare(b.name));
+    setContentItems(combined);
+  }, [collections, documents]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -155,24 +199,30 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
   }, [isAuthenticated, onQuestionDetected, onAudioStreamStateChange]);
 
 
-  const loadCollections = async () => {
+  const loadContent = async () => {
     if (!isAuthenticated) return;
 
     try {
-      setCollectionsLoading(true);
-      console.log(
-        "[QueueCommands] Loading collections for authenticated user..."
-      );
-      const userCollections = await window.electronAPI.invoke(
-        "qna-get-collections"
-      );
+      setContentLoading(true);
+      console.log("[QueueCommands] Loading content for authenticated user...");
+      
+      // Load both collections and documents in parallel
+      const [userCollections, userDocuments] = await Promise.all([
+        window.electronAPI.invoke("qna-get-collections"),
+        window.electronAPI.invoke("documents-get-user-documents")
+      ]);
+      
       console.log("[QueueCommands] Loaded collections:", userCollections);
+      console.log("[QueueCommands] Loaded documents:", userDocuments);
+      
       setCollections(userCollections);
+      setDocuments(userDocuments);
     } catch (error) {
-      console.error("Error loading collections:", error);
+      console.error("Error loading content:", error);
       setCollections([]);
+      setDocuments([]);
     } finally {
-      setCollectionsLoading(false);
+      setContentLoading(false);
     }
   };
 
@@ -620,9 +670,13 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
                 </>
               ) : (
                 <>
-                  <Database className="w-3 h-3" />
+                  {responseMode.collectionId?.startsWith('doc_') ? (
+                    <FileText className="w-3 h-3" />
+                  ) : (
+                    <Database className="w-3 h-3" />
+                  )}
                   <span className="truncate max-w-[60px]">
-                    {responseMode.collectionName || "QnA"}
+                    {responseMode.collectionName || "コンテンツ"}
                   </span>
                 </>
               )}
@@ -693,7 +747,7 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
         createPortal(
           <div
             ref={dropdownRef}
-            className="fixed morphism-dropdown shadow-xl z-[9999] max-h-64 overflow-y-auto"
+            className="fixed morphism-dropdown shadow-xl z-[9999] max-h-80 overflow-y-auto morphism-scrollbar"
             style={{
               top: dropdownPosition.top,
               left: dropdownPosition.left,
@@ -721,48 +775,52 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
               {/* Separator */}
               {isAuthenticated && <div className="h-px bg-white/10 my-1" />}
 
-              {/* QnA Collections */}
+              {/* Content Items (QnA Collections and Documents) */}
               {isAuthenticated ? (
-                collectionsLoading ? (
+                contentLoading ? (
                   <div className="px-3 py-2 text-[11px] text-white/50">
-                    Loading collections...
+                    Loading content...
                   </div>
-                ) : collections.length > 0 ? (
-                  collections.map((collection) => (
+                ) : contentItems.length > 0 ? (
+                  contentItems.map((item) => (
                     <button
-                      key={collection.id}
+                      key={item.id}
                       className={`w-full flex items-center gap-2 px-3 py-2 text-[11px] rounded-md transition-colors ${responseMode.type === "qna" &&
-                          responseMode.collectionId === collection.id
+                          responseMode.collectionId === item.id
                           ? "bg-white/20 text-white"
                           : "text-white/70 hover:bg-white/10 hover:text-white"
                         }`}
                       onClick={() =>
                         handleResponseModeChange({
-                          type: "qna",
-                          collectionId: collection.id,
-                          collectionName: collection.name,
+                          type: "qna", // Keep as "qna" for compatibility, the backend will handle the distinction
+                          collectionId: item.id,
+                          collectionName: item.name,
                         })
                       }
                     >
-                      <Database className="w-4 h-4" />
-                      <div className="text-left flex-1">
+                      {item.type === 'document' ? (
+                        <FileText className="w-4 h-4 flex-shrink-0" />
+                      ) : (
+                        <Database className="w-4 h-4 flex-shrink-0" />
+                      )}
+                      <div className="text-left flex-1 min-w-0">
                         <div className="font-medium truncate">
-                          {collection.name}
+                          {item.name}
                         </div>
                         <div className="text-[10px] text-white/50">
-                          {collection.qna_count || 0} items
+                          {item.count} {item.type === 'document' ? 'chunks' : 'items'}
                         </div>
                       </div>
                     </button>
                   ))
                 ) : (
                   <div className="px-3 py-2 text-[11px] text-white/50">
-                    No QnA collections found
+                    No content found
                   </div>
                 )
               ) : (
                 <div className="px-3 py-2 text-[11px] text-white/50">
-                  Sign in to use QnA collections
+                  Sign in to use content
                 </div>
               )}
             </div>
