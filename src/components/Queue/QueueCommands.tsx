@@ -21,22 +21,7 @@ interface QnACollection {
   qna_count?: number;
 }
 
-interface Document {
-  id: string;
-  display_name: string;
-  file_name: string;
-  chunk_count: number;
-  created_at: string;
-  status: string;
-}
-
-interface ContentItem {
-  id: string;
-  name: string;
-  description: string | null;
-  count: number;
-  type: 'qna' | 'document';
-}
+// Removed Document interface and ContentItem type since we only use collections now
 
 interface ResponseMode {
   type: "plain" | "qna";
@@ -74,8 +59,6 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
   // Response mode dropdown state
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [collections, setCollections] = useState<QnACollection[]>([]);
-  const [documents, setDocuments] = useState<Document[]>([]);
-  const [contentItems, setContentItems] = useState<ContentItem[]>([]);
   const [contentLoading, setContentLoading] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -83,6 +66,7 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
     top: 0,
     left: 0,
     width: 0,
+    height: 0,
   });
 
   // Audio Stream state (new always-on feature)
@@ -107,34 +91,10 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
 
   // Load content when authenticated
   useEffect(() => {
-    if (isAuthenticated && isDropdownOpen && contentItems.length === 0) {
+    if (isAuthenticated && isDropdownOpen && collections.length === 0) {
       loadContent();
     }
   }, [isAuthenticated, isDropdownOpen]);
-
-  // Combine collections and documents when either changes
-  useEffect(() => {
-    const combined: ContentItem[] = [
-      ...collections.map(collection => ({
-        id: collection.id,
-        name: collection.name,
-        description: collection.description,
-        count: collection.qna_count || 0,
-        type: 'qna' as const
-      })),
-      ...documents.map(document => ({
-        id: `doc_${document.id}`, // Prefix with 'doc_' to distinguish from QNA
-        name: document.display_name || document.file_name,
-        description: `${document.chunk_count} chunks`,
-        count: document.chunk_count,
-        type: 'document' as const
-      }))
-    ];
-
-    // Sort by name
-    combined.sort((a, b) => a.name.localeCompare(b.name));
-    setContentItems(combined);
-  }, [collections, documents]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -162,13 +122,93 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
   useEffect(() => {
     if (isDropdownOpen && triggerRef.current) {
       const rect = triggerRef.current.getBoundingClientRect();
+      const gap = 16; // 16px gap
+      const viewportHeight = window.innerHeight;
+      const viewportWidth = window.innerWidth;
+      
+      // Calculate dynamic content height
+      const baseHeight = 60; // Plain mode option height + padding
+      const separatorHeight = isAuthenticated ? 17 : 0; // Separator height
+      const itemHeight = 52; // Each collection item height (including padding)
+      const loadingHeight = 36; // Loading/empty state height
+      const padding = 8; // Container padding
+      
+      let contentHeight = baseHeight + separatorHeight + padding;
+      
+      if (isAuthenticated) {
+        if (contentLoading) {
+          contentHeight += loadingHeight;
+        } else if (collections.length > 0) {
+          contentHeight += collections.length * itemHeight;
+        } else {
+          contentHeight += loadingHeight; // "No files found" message
+        }
+      } else {
+        contentHeight += loadingHeight; // "Sign in to use files" message
+      }
+      
+      // Set reasonable min/max bounds
+      const minDropdownHeight = 80;
+      const maxDropdownHeight = 400;
+      const idealHeight = Math.max(minDropdownHeight, Math.min(maxDropdownHeight, contentHeight));
+      
+      // Calculate available space below and above the trigger
+      const spaceBelow = viewportHeight - rect.bottom - gap - 20; // 20px bottom margin
+      const spaceAbove = rect.top - gap - 20; // 20px top margin
+      
+      // Determine final height and position
+      let finalHeight: number;
+      let shouldPositionAbove = false;
+      
+      if (spaceBelow >= idealHeight) {
+        // Enough space below
+        finalHeight = idealHeight;
+        shouldPositionAbove = false;
+      } else if (spaceAbove >= idealHeight) {
+        // Not enough space below, but enough above
+        finalHeight = idealHeight;
+        shouldPositionAbove = true;
+      } else {
+        // Not enough space in either direction, use available space
+        if (spaceBelow > spaceAbove) {
+          finalHeight = Math.max(minDropdownHeight, spaceBelow);
+          shouldPositionAbove = false;
+        } else {
+          finalHeight = Math.max(minDropdownHeight, spaceAbove);
+          shouldPositionAbove = true;
+        }
+      }
+      
+      // Calculate vertical position
+      let top: number;
+      if (shouldPositionAbove) {
+        top = rect.top + window.scrollY - finalHeight - gap;
+      } else {
+        top = rect.bottom + window.scrollY + gap;
+      }
+      
+      // Calculate horizontal position and ensure it stays within viewport
+      const dropdownWidth = Math.max(240, rect.width);
+      let left = rect.left + window.scrollX;
+      
+      // Adjust if dropdown would overflow right edge
+      if (left + dropdownWidth > viewportWidth) {
+        left = viewportWidth - dropdownWidth - 16; // 16px margin from edge
+      }
+      
+      // Ensure dropdown doesn't go off left edge
+      if (left < 16) {
+        left = 16; // 16px margin from edge
+      }
+      
       setDropdownPosition({
-        top: rect.bottom + window.scrollY + 16, // 16px gap (consistent with bar-to-chat spacing)
-        left: rect.left + window.scrollX,
-        width: Math.max(192, rect.width), // Min width 192px (w-48)
+        top,
+        left,
+        width: dropdownWidth,
+        height: finalHeight,
       });
     }
-  }, [isDropdownOpen]);
+  }, [isDropdownOpen, collections, contentLoading, isAuthenticated]);
 
   // Audio Stream event listeners setup
   useEffect(() => {
@@ -204,23 +244,17 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
 
     try {
       setContentLoading(true);
-      console.log("[QueueCommands] Loading content for authenticated user...");
+      console.log("[QueueCommands] Loading collections for authenticated user...");
       
-      // Load both collections and documents in parallel
-      const [userCollections, userDocuments] = await Promise.all([
-        window.electronAPI.invoke("qna-get-collections"),
-        window.electronAPI.invoke("documents-get-user-documents")
-      ]);
+      // Only load collections since documents are now part of collections
+      const userCollections = await window.electronAPI.invoke("qna-get-collections");
       
       console.log("[QueueCommands] Loaded collections:", userCollections);
-      console.log("[QueueCommands] Loaded documents:", userDocuments);
       
       setCollections(userCollections);
-      setDocuments(userDocuments);
     } catch (error) {
-      console.error("Error loading content:", error);
+      console.error("Error loading collections:", error);
       setCollections([]);
-      setDocuments([]);
     } finally {
       setContentLoading(false);
     }
@@ -670,13 +704,9 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
                 </>
               ) : (
                 <>
-                  {responseMode.collectionId?.startsWith('doc_') ? (
-                    <FileText className="w-3 h-3" />
-                  ) : (
-                    <Database className="w-3 h-3" />
-                  )}
+                  <Database className="w-3 h-3" />
                   <span className="truncate max-w-[60px]">
-                    {responseMode.collectionName || "コンテンツ"}
+                    {responseMode.collectionName || "ファイル"}
                   </span>
                 </>
               )}
@@ -747,11 +777,16 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
         createPortal(
           <div
             ref={dropdownRef}
-            className="fixed morphism-dropdown shadow-xl z-[9999] max-h-80 overflow-y-auto morphism-scrollbar"
+            className="fixed morphism-dropdown shadow-xl overflow-y-auto morphism-scrollbar"
             style={{
               top: dropdownPosition.top,
               left: dropdownPosition.left,
               width: dropdownPosition.width,
+              height: dropdownPosition.height,
+              zIndex: 99999, // Use inline style for maximum z-index priority
+              pointerEvents: 'auto', // Ensure dropdown is clickable
+              maxHeight: 'none', // Remove fixed max height constraint
+              minHeight: 'auto', // Allow natural height up to max
             }}
           >
             <div className="p-1">
@@ -775,52 +810,48 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
               {/* Separator */}
               {isAuthenticated && <div className="h-px bg-white/10 my-1" />}
 
-              {/* Content Items (QnA Collections and Documents) */}
+              {/* Collections (Files) */}
               {isAuthenticated ? (
                 contentLoading ? (
                   <div className="px-3 py-2 text-[11px] text-white/50">
-                    Loading content...
+                    ファイルを読み込み中...
                   </div>
-                ) : contentItems.length > 0 ? (
-                  contentItems.map((item) => (
+                ) : collections.length > 0 ? (
+                  collections.map((collection) => (
                     <button
-                      key={item.id}
+                      key={collection.id}
                       className={`w-full flex items-center gap-2 px-3 py-2 text-[11px] rounded-md transition-colors ${responseMode.type === "qna" &&
-                          responseMode.collectionId === item.id
+                          responseMode.collectionId === collection.id
                           ? "bg-white/20 text-white"
                           : "text-white/70 hover:bg-white/10 hover:text-white"
                         }`}
                       onClick={() =>
                         handleResponseModeChange({
-                          type: "qna", // Keep as "qna" for compatibility, the backend will handle the distinction
-                          collectionId: item.id,
-                          collectionName: item.name,
+                          type: "qna",
+                          collectionId: collection.id,
+                          collectionName: collection.name,
                         })
                       }
                     >
-                      {item.type === 'document' ? (
-                        <FileText className="w-4 h-4 flex-shrink-0" />
-                      ) : (
-                        <Database className="w-4 h-4 flex-shrink-0" />
-                      )}
+                      <Database className="w-4 h-4 flex-shrink-0" />
                       <div className="text-left flex-1 min-w-0">
                         <div className="font-medium truncate">
-                          {item.name}
+                          {collection.name}
                         </div>
                         <div className="text-[10px] text-white/50">
-                          {item.count} {item.type === 'document' ? 'chunks' : 'items'}
+                          {collection.qna_count || 0} 項目
                         </div>
                       </div>
                     </button>
                   ))
                 ) : (
                   <div className="px-3 py-2 text-[11px] text-white/50">
-                    No content found
+                    ファイルが見つかりません
                   </div>
                 )
               ) : (
                 <div className="px-3 py-2 text-[11px] text-white/50">
-                  Sign in to use content
+                  ファイルを使用するにはサインインしてください
                 </div>
               )}
             </div>

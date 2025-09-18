@@ -340,41 +340,12 @@ ${JSON.stringify(problemInfo, null, 2)}
       return { hasContext: false, results: [], type: 'qna' }
     }
 
-    // Determine if this is a QNA collection or document by checking the format
-    // QNA collection IDs are UUIDs, document IDs are prefixed with 'doc_'
-    const isDocument = collectionId.startsWith('doc_')
+    // All IDs are now collection IDs in the unified file system
+    // Collections can contain both QnA pairs and documents
+    console.log(`[LLMHelper] Processing collection search - collectionId: ${collectionId}`)
     
-    if (isDocument && this.documentService) {
-      // Handle document search
-      const documentId = collectionId.replace('doc_', '')
-      console.log(`[LLMHelper] Processing document search - collectionId: ${collectionId}, documentId: ${documentId}`)
-      
-      try {
-        const searchResults = await this.documentService.findRelevantChunks(
-          message,
-          documentId,
-          0.6 // Reasonable similarity threshold for better recall
-        )
-
-        console.log(`[LLMHelper] Document RAG search for "${message}" found ${searchResults.chunks.length} chunks`)
-        if (searchResults.chunks.length > 0) {
-          console.log(`[LLMHelper] Best chunk similarity: ${searchResults.chunks[0].similarity.toFixed(3)}`)
-          console.log(`[LLMHelper] Best chunk preview: ${searchResults.chunks[0].chunk_text.substring(0, 100)}...`)
-        }
-
-        return {
-          hasContext: searchResults.hasRelevantChunks,
-          results: [], // Empty for documents
-          documentChunks: searchResults.chunks,
-          documentName: searchResults.chunks[0]?.document_name,
-          type: 'document'
-        }
-      } catch (error) {
-        console.error('[LLMHelper] Error searching document context:', error)
-        return { hasContext: false, results: [], type: 'document' }
-      }
-    } else if (this.qnaService) {
-      // Handle QNA collection search
+    if (this.qnaService) {
+      // Handle collection search (unified system with both QnA and document content)
       try {
         const searchResults = await this.qnaService.findRelevantAnswers(
           message,
@@ -382,7 +353,7 @@ ${JSON.stringify(problemInfo, null, 2)}
           0.6 // Reasonable similarity threshold for better recall
         )
 
-        console.log(`[LLMHelper] QNA RAG search for "${message}" found ${searchResults.answers.length} results`)
+        console.log(`[LLMHelper] Collection RAG search for "${message}" found ${searchResults.answers.length} results`)
         if (searchResults.answers.length > 0) {
           console.log(`[LLMHelper] Best match similarity: ${searchResults.answers[0].similarity.toFixed(3)}`)
         }
@@ -394,7 +365,7 @@ ${JSON.stringify(problemInfo, null, 2)}
           type: 'qna'
         }
       } catch (error) {
-        console.error('[LLMHelper] Error searching QNA context:', error)
+        console.error('[LLMHelper] Error searching collection context:', error)
         return { hasContext: false, results: [], type: 'qna' }
       }
     }
