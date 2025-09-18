@@ -27,6 +27,14 @@ export class AudioStreamProcessor extends EventEmitter {
   private tempBuffer: Float32Array | null = null;
   private lastChunkTime: number = 0;
   private accumulatedSamples: number = 0;
+  
+  // NEW: Question activity tracking for ultra-fast detection
+  private recentAudioBuffer: string[] = []; // Store recent audio patterns
+  private lastQuestionHintTime: number = 0;
+  
+  // NEW: Streaming detection state
+  private streamingBuffer: string = ''; // Accumulate partial transcriptions
+  private lastStreamingCheck: number = 0;
 
   // Japanese filler words and patterns to remove
   private readonly fillerWords = new Set([
@@ -180,7 +188,7 @@ export class AudioStreamProcessor extends EventEmitter {
   }
 
   /**
-   * Determine if we should create a new chunk
+   * Determine if we should create a new chunk - ULTRA OPTIMIZED for speed
    */
   private async shouldCreateChunk(): Promise<boolean> {
     const now = Date.now();
@@ -191,18 +199,22 @@ export class AudioStreamProcessor extends EventEmitter {
     // Calculate accumulated audio duration (assuming 16kHz sample rate)
     const accumulatedDuration = (this.accumulatedSamples / this.config.sampleRate) * 1000;
     
-    // Create chunk if:
-    // 1. We have accumulated enough audio (5+ seconds) OR
-    // 2. We haven't created a chunk in a while (10+ seconds) OR  
-    // 3. Word count exceeds limit
-    const shouldCreateByDuration = accumulatedDuration >= 5000;
-    const shouldCreateByTime = timeSinceLastChunk >= 10000;
+    // ULTRA AGGRESSIVE: Create chunk if:
+    // 1. We have accumulated 2+ seconds of audio (reduced from 5s) OR
+    // 2. We haven't created a chunk in 4+ seconds (reduced from 10s) OR  
+    // 3. Word count exceeds limit OR
+    // 4. We detect potential question markers in recent audio
+    const shouldCreateByDuration = accumulatedDuration >= 2000; // 2s instead of 5s
+    const shouldCreateByTime = timeSinceLastChunk >= 4000; // 4s instead of 10s
     const shouldCreateByWords = this.wordCount >= this.config.maxWords;
     
-    const shouldCreate = shouldCreateByDuration || shouldCreateByTime || shouldCreateByWords;
+    // NEW: Quick heuristic check for question-like audio patterns
+    const shouldCreateByQuestionHint = this.hasRecentQuestionActivity();
+    
+    const shouldCreate = shouldCreateByDuration || shouldCreateByTime || shouldCreateByWords || shouldCreateByQuestionHint;
     
     if (shouldCreate) {
-      console.log('[AudioStreamProcessor] Creating chunk - Duration:', accumulatedDuration.toFixed(0), 'ms, Time since last:', timeSinceLastChunk.toFixed(0), 'ms, Words:', this.wordCount);
+      console.log('[AudioStreamProcessor] Creating chunk - Duration:', accumulatedDuration.toFixed(0), 'ms, Time since last:', timeSinceLastChunk.toFixed(0), 'ms, Words:', this.wordCount, 'QuestionHint:', shouldCreateByQuestionHint);
     }
     
     return shouldCreate;
@@ -311,6 +323,12 @@ export class AudioStreamProcessor extends EventEmitter {
 
       this.emit('transcription-completed', result);
 
+      // NEW: Update recent audio buffer for question hint detection
+      this.updateRecentAudioBuffer(result.text);
+
+      // NEW: Streaming question detection - check immediately on each transcription
+      this.performStreamingQuestionDetection(result.text);
+
       // Detect and immediately refine questions
       if (result.text.trim()) {
         console.log('[AudioStreamProcessor] Processing transcription for questions:', result.text);
@@ -333,6 +351,14 @@ export class AudioStreamProcessor extends EventEmitter {
    */
   private async detectAndRefineQuestions(transcription: TranscriptionResult): Promise<void> {
     try {
+      console.log(`[AudioStreamProcessor] Detecting questions in: "${transcription.text}"`);
+      
+      // ULTRA OPTIMIZATION: Skip empty or very short transcriptions
+      if (!transcription.text || transcription.text.trim().length < 3) {
+        console.log('[AudioStreamProcessor] Skipping question detection - text too short');
+        return;
+      }
+
       const detectedQuestion = this.questionDetector.detectQuestion(transcription);
 
       // Use either detector output or fall back to full transcription for heuristics
@@ -341,9 +367,17 @@ export class AudioStreamProcessor extends EventEmitter {
       // Split possible multiple questions, trim preface, and refine each
       const questionParts = this.splitIntoQuestions(baseText);
 
-      for (const part of questionParts) {
+      if (questionParts.length === 0) {
+        console.log('[AudioStreamProcessor] No questions detected');
+        return;
+      }
+
+      console.log(`[AudioStreamProcessor] Found ${questionParts.length} potential questions:`, questionParts);
+
+      // Process each question part with PARALLEL processing for speed
+      const questionPromises = questionParts.map(async (part) => {
         const core = this.trimPreface(part);
-        if (!core || core.trim().length < 2) continue;
+        if (!core || core.trim().length < 2) return null;
 
         const tempQuestion: DetectedQuestion = {
           id: uuidv4(),
@@ -354,7 +388,7 @@ export class AudioStreamProcessor extends EventEmitter {
 
         // Validate by either the detector's rules or our heuristic recognizer
         if (!this.questionDetector.isValidQuestion(tempQuestion) && !this.looksLikeQuestion(core)) {
-          continue;
+          return null;
         }
 
         const refinedText = this.refineQuestionAlgorithmically(core);
@@ -364,11 +398,24 @@ export class AudioStreamProcessor extends EventEmitter {
           refinedText
         };
 
-        this.state.questionBuffer.push(refinedQuestion);
-        this.emit('question-detected', refinedQuestion);
+        console.log(`[AudioStreamProcessor] ULTRA-FAST Question detected: "${refinedText}"`);
+        return refinedQuestion;
+      });
+
+      // Wait for all parallel processing to complete
+      const allQuestions = (await Promise.all(questionPromises)).filter(q => q !== null);
+      
+      // Add valid questions to state and emit immediately
+      for (const question of allQuestions) {
+        if (question) {
+          this.state.questionBuffer.push(question);
+          this.emit('question-detected', question);
+          console.log(`[AudioStreamProcessor] ULTRA-FAST Question emitted: "${question.text}"`);
+        }
       }
 
-      if (questionParts.length > 0) {
+      // Emit state change if we added any questions
+      if (allQuestions.length > 0) {
         this.emit('state-changed', { ...this.state });
       }
       
@@ -553,6 +600,108 @@ export class AudioStreamProcessor extends EventEmitter {
   public clearQuestions(): void {
     this.state.questionBuffer = [];
     this.emit('state-changed', { ...this.state });
+  }
+
+  /**
+   * NEW: Quick heuristic to detect recent question activity patterns
+   */
+  private hasRecentQuestionActivity(): boolean {
+    const now = Date.now();
+    
+    // Check if we've had recent question hints within last 3 seconds
+    if (now - this.lastQuestionHintTime < 3000) {
+      return true;
+    }
+    
+    // Quick pattern matching on recent audio buffer for question indicators
+    const recentText = this.recentAudioBuffer.join(' ').toLowerCase();
+    
+    // Japanese question patterns that suggest a question is being formed
+    const quickQuestionPatterns = [
+      'どう', 'どの', 'どこ', 'いつ', 'なぜ', 'なん', '何', 'だれ', '誰',
+      'ですか', 'ますか', 'でしょうか', 'か？', 'か。'
+    ];
+    
+    const hasQuestionPattern = quickQuestionPatterns.some(pattern => 
+      recentText.includes(pattern)
+    );
+    
+    if (hasQuestionPattern) {
+      this.lastQuestionHintTime = now;
+      console.log('[AudioStreamProcessor] Question hint detected in recent audio:', recentText.substring(0, 50));
+    }
+    
+    return hasQuestionPattern;
+  }
+
+  /**
+   * NEW: Real-time streaming question detection during transcription
+   */
+  private performStreamingQuestionDetection(newText: string): void {
+    const now = Date.now();
+    
+    // Add new text to streaming buffer
+    this.streamingBuffer += ' ' + newText;
+    
+    // Limit buffer size to prevent memory bloat (keep last 500 chars)
+    if (this.streamingBuffer.length > 500) {
+      this.streamingBuffer = this.streamingBuffer.slice(-500);
+    }
+    
+    // Only check every 500ms to avoid excessive processing
+    if (now - this.lastStreamingCheck < 500) {
+      return;
+    }
+    
+    this.lastStreamingCheck = now;
+    
+    // Quick streaming question detection using lightweight patterns
+    const streamingText = this.streamingBuffer.toLowerCase().trim();
+    
+    // Ultra-fast Japanese question pattern matching
+    const streamingQuestionPatterns = [
+      /どう[です|でしょう|思い|考え].*[か？]/,
+      /何[が|を|で|に].*[か？]/,
+      /いつ.*[か？]/,
+      /どこ.*[か？]/,
+      /だれ.*[か？]/,
+      /なぜ.*[か？]/,
+      /[です|ます]か[？。]/,
+      /でしょうか[？。]/
+    ];
+    
+    const hasStreamingQuestion = streamingQuestionPatterns.some(pattern => 
+      pattern.test(streamingText)
+    );
+    
+    if (hasStreamingQuestion) {
+      console.log('[AudioStreamProcessor] STREAMING question pattern detected:', streamingText.substring(0, 100));
+      
+      // Trigger immediate chunk processing if we detect a question pattern
+      if (this.currentAudioData.length > 0) {
+        console.log('[AudioStreamProcessor] Triggering immediate chunk processing due to streaming question detection');
+        this.createAndProcessChunk().catch(error => {
+          console.error('[AudioStreamProcessor] Error in streaming-triggered chunk processing:', error);
+        });
+      }
+      
+      // Clear buffer after detection to avoid re-triggering
+      this.streamingBuffer = '';
+    }
+  }
+
+  /**
+   * NEW: Update recent audio buffer for question hint detection
+   */
+  private updateRecentAudioBuffer(text: string): void {
+    if (!text || text.trim().length === 0) return;
+    
+    this.recentAudioBuffer.push(text.toLowerCase());
+    
+    // Keep only last 10 entries to avoid memory bloat
+    if (this.recentAudioBuffer.length > 10) {
+      this.recentAudioBuffer.shift();
+    }
   }
 
   /**
