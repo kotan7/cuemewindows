@@ -2,6 +2,8 @@ import { GoogleGenerativeAI, GenerativeModel } from "@google/generative-ai"
 import fs from "fs"
 import { QnAService, SearchResult } from "./QnAService"
 import { DocumentService, DocumentSearchResult } from "./DocumentService"
+import { ModeManager } from "./ModeManager"
+import { ModeResponse, CompatibleResponse } from "../src/types/modes"
 
 export interface RAGContext {
   hasContext: boolean
@@ -468,9 +470,86 @@ ${message}
     text = text.replace(/^(それでは、|では、|まず、)/g, "");
     
     // Clean up extra whitespace
-    text = text.replace(/\n\n\n+/g, "\n\n");
+    text = text.replace(/\n{3,}/g, "\n\n");
     text = text.trim();
     
     return text;
+  }
+
+  // Mode support methods
+  private modeManager: ModeManager = new ModeManager()
+
+  public async chatWithMode(
+    message: string,
+    modeKey: string = 'interview',
+    collectionId?: string
+  ): Promise<CompatibleResponse> {
+    try {
+      // Search for relevant context if collection is specified
+      const ragContext = await this.searchRAGContext(message, collectionId)
+      
+      // Build mode-specific system prompt
+      const systemPrompt = this.modeManager.buildSystemPrompt(modeKey)
+      
+      // Format the prompt with RAG context if available
+      const enhancedPrompt = this.formatModePrompt(message, ragContext, systemPrompt)
+      
+      const result = await this.model.generateContent(enhancedPrompt)
+      const response = await result.response
+      let text = response.text()
+      
+      // Try to parse as ModeResponse first
+      const modeResponse = this.modeManager.parseResponse(text)
+      
+      if (modeResponse) {
+        return this.modeManager.createCompatibleResponse(text, modeResponse, ragContext)
+      } else {
+        // Fallback to plain text processing
+        text = this.cleanResponseText(text)
+        return this.modeManager.createCompatibleResponse(text, null, ragContext)
+      }
+    } catch (error) {
+      console.error("[LLMHelper] Error in chatWithMode:", error)
+      throw error
+    }
+  }
+
+  private formatModePrompt(message: string, ragContext: RAGContext, systemPrompt: string): string {
+    let contextInfo = ''
+    
+    if (ragContext.hasContext) {
+      if (ragContext.type === 'qna' && ragContext.results.length > 0) {
+        contextInfo = ragContext.results
+          .map((result, index) => {
+            return `【関連知識 ${index + 1}】\nQ: ${result.question}\nA: ${result.answer}\n類似度: ${(result.similarity * 100).toFixed(1)}%`
+          })
+          .join('\n\n')
+      } else if (ragContext.type === 'document' && ragContext.documentChunks && ragContext.documentChunks.length > 0) {
+        contextInfo = ragContext.documentChunks
+          .map((chunk, index) => {
+            return `【文書情報 ${index + 1}】\n内容: ${chunk.chunk_text}\n類似度: ${(chunk.similarity * 100).toFixed(1)}%`
+          })
+          .join('\n\n')
+      }
+    }
+
+    let prompt = systemPrompt
+
+    if (contextInfo) {
+      prompt += `\n\n## 利用可能な関連情報：\n${contextInfo}`
+    }
+
+    prompt += `
+
+## ユーザーの質問：
+${message}
+
+上記の質問に対して、指定されたモードの設定に従って回答してください。`
+
+    return prompt
+  }
+
+  public getModeManager(): ModeManager {
+    return this.modeManager
   }
 }

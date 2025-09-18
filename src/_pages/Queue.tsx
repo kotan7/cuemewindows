@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { ModeSelect, ModeToggle } from "../components/ui/mode-select";
 import { useQuery } from "react-query";
 import { MessageCircle, Send, LogOut, User, Settings } from "lucide-react";
 import ScreenshotQueue from "../components/Queue/ScreenshotQueue";
@@ -55,6 +56,9 @@ const Queue: React.FC<QueueProps> = ({ setView, onSignOut }) => {
   const [responseMode, setResponseMode] = useState<ResponseMode>({
     type: "plain",
   });
+  
+  // Mode state for new mode functionality
+  const [currentMode, setCurrentMode] = useState('interview'); // デフォルトは面接モード
 
   // Audio stream state
   const [detectedQuestions, setDetectedQuestions] = useState<DetectedQuestion[]>([]);
@@ -143,16 +147,22 @@ const Queue: React.FC<QueueProps> = ({ setView, onSignOut }) => {
       let response: string;
 
       if (responseMode.type === "qna" && responseMode.collectionId) {
-        // Use RAG-enabled chat (user is guaranteed to be authenticated at this point)
+        // Use mode-enabled RAG chat
         const result = await window.electronAPI.invoke(
-          "gemini-chat-rag",
+          "gemini-chat-mode",
           currentInput,
+          currentMode,
           responseMode.collectionId
         );
-        response = result.response;
+        response = result.text || result.modeResponse?.answer || result.response;
       } else {
-        // Use plain Gemini chat
-        response = await window.electronAPI.invoke("gemini-chat", currentInput);
+        // Use mode-enabled plain chat
+        const result = await window.electronAPI.invoke(
+          "gemini-chat-mode",
+          currentInput,
+          currentMode
+        );
+        response = result.text || result.modeResponse?.answer || result.response;
       }
 
       setChatMessages((msgs) => [...msgs, { role: "gemini", text: response }]);
@@ -585,6 +595,17 @@ const Queue: React.FC<QueueProps> = ({ setView, onSignOut }) => {
                   />
                 </svg>
               </button>
+
+              {/* Mode Selection */}
+              <div className="mb-3">
+                <div className="text-xs text-white/60 mb-2">回答モード</div>
+                <ModeToggle
+                  currentMode={currentMode}
+                  onModeChange={setCurrentMode}
+                  compactModes={['interview', 'meeting', 'sales', 'support']}
+                  className=""
+                />
+              </div>
 
               {chatMessages.length === 0 ? (
                 <div className="text-sm text-white/80 text-center mt-8 pr-8 mb-3">

@@ -28,6 +28,11 @@ interface ElectronAPI {
   analyzeAudioFile: (path: string, collectionId?: string) => Promise<{ text: string; timestamp: number }>
   quitApp: () => Promise<void>
   invoke: (channel: string, ...args: any[]) => Promise<any>
+  
+  // Mode-enabled chat methods
+  "gemini-chat-mode": (message: string, modeKey?: string, collectionId?: string) => Promise<{ text?: string; modeResponse?: any; response?: string }>
+  "get-available-modes": () => Promise<Array<{ key: string; displayName: string; description: string }>>
+  
   // Auth methods
   authSignIn: (email: string, password: string) => Promise<{ success: boolean; error?: string }>
   authSignUp: (email: string, password: string) => Promise<{ success: boolean; error?: string }>
