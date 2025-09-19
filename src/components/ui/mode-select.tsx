@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { ModeOption } from '../../types/modes'
+import { Target, FileText, Briefcase, Scale, BookOpen, Phone, Wrench, MessageSquare } from 'lucide-react'
 
 interface ModeSelectProps {
   currentMode: string
@@ -147,16 +148,16 @@ export const ModeToggle: React.FC<{
   }
 
   const getModeIcon = (modeKey: string) => {
-    const icons: Record<string, string> = {
-      interview: '🎯',
-      meeting: '📝',
-      sales: '💼',
-      debate: '⚖️',
-      class: '📚',
-      telesales: '📞',
-      support: '🛠️'
+    const iconMap: Record<string, React.ComponentType<any>> = {
+      interview: Target,
+      meeting: FileText,
+      sales: Briefcase,
+      debate: Scale,
+      class: BookOpen,
+      telesales: Phone,
+      support: Wrench
     }
-    return icons[modeKey] || '💬'
+    return iconMap[modeKey] || MessageSquare
   }
 
   const getModeColor = (modeKey: string) => {
@@ -174,21 +175,24 @@ export const ModeToggle: React.FC<{
 
   return (
     <div className={`flex flex-wrap gap-2 ${className}`}>
-      {availableModes.map((mode) => (
-        <button
-          key={mode.key}
-          onClick={() => onModeChange(mode.key)}
-          className={`px-3 py-1 rounded-full text-xs font-medium border transition-all hover:shadow-sm ${
-            mode.key === currentMode
-              ? getModeColor(mode.key)
-              : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
-          }`}
-          title={mode.description}
-        >
-          <span className="mr-1">{getModeIcon(mode.key)}</span>
-          {mode.displayName.replace('モード', '').replace('（候補者）', '').replace('（提案）', '').replace('（高応答）', '')}
-        </button>
-      ))}
+      {availableModes.map((mode) => {
+        const Icon = getModeIcon(mode.key);
+        return (
+          <button
+            key={mode.key}
+            onClick={() => onModeChange(mode.key)}
+            className={`px-3 py-1 rounded-full text-xs font-medium border transition-all hover:shadow-sm flex items-center gap-1 ${
+              mode.key === currentMode
+                ? getModeColor(mode.key)
+                : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
+            }`}
+            title={mode.description}
+          >
+            <Icon className="w-3 h-3" />
+            {mode.displayName.replace('モード', '').replace('（候補者）', '').replace('（提案）', '').replace('（高応答）', '')}
+          </button>
+        );
+      })}
     </div>
   )
 }

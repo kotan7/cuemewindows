@@ -145,7 +145,7 @@ JSONオブジェクトのみを返し、マークダウン形式やコードブ�
       },
       {
         key: "support",
-        displayName: "カスタマーサポート",
+        displayName: "サポート",
         tone: "support",
         formality: "keigo",
         length: "standard",
@@ -164,7 +164,7 @@ JSONオブジェクトのみを返し、マークダウン形式やコードブ�
     modesData.forEach(mode => {
       this.modes.set(mode.key, mode)
     })
-    
+
     console.log(`[ModeManager] Loaded ${this.modes.size} modes`)
   }
 
@@ -220,7 +220,7 @@ JSONオブジェクトのみを返し、マークダウン形式やコードブ�
     const toneDesc = this.getToneDescription(mode.tone)
     const lengthDesc = this.getLengthDescription(mode.length)
     const formalityDesc = this.getFormalityDescription(mode.formality)
-    
+
     return `${toneDesc}、${lengthDesc}、${formalityDesc}`
   }
 
@@ -266,7 +266,7 @@ JSONオブジェクトのみを返し、マークダウン形式やコードブ�
         .trim()
 
       const parsed = JSON.parse(cleanedText)
-      
+
       // 必須フィールドの検証
       if (!parsed.answer || !parsed.style_meta) {
         console.warn('[ModeManager] Invalid response format')
@@ -281,8 +281,8 @@ JSONオブジェクトのみを返し、マークダウン形式やコードブ�
   }
 
   public createCompatibleResponse(
-    text: string, 
-    modeResponse: ModeResponse | null, 
+    text: string,
+    modeResponse: ModeResponse | null,
     ragContext?: any
   ) {
     return {

@@ -188,7 +188,7 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
       }
       
       // Calculate horizontal position and ensure it stays within viewport
-      const dropdownWidth = Math.max(240, rect.width);
+      const dropdownWidth = Math.max(160, rect.width);
       let left = rect.left + window.scrollX;
       
       // Adjust if dropdown would overflow right edge
@@ -777,7 +777,7 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
         createPortal(
           <div
             ref={dropdownRef}
-            className="fixed morphism-dropdown shadow-xl overflow-y-auto morphism-scrollbar"
+            className="fixed morphism-dropdown shadow-xl overflow-hidden"
             style={{
               top: dropdownPosition.top,
               left: dropdownPosition.left,
@@ -789,7 +789,7 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
               minHeight: 'auto', // Allow natural height up to max
             }}
           >
-            <div className="p-1">
+            <div className="p-1 overflow-y-auto morphism-scrollbar h-full">
               {/* Plain Mode Option */}
               <button
                 className={`w-full flex items-center gap-2 px-3 py-2 text-[11px] rounded-md transition-colors ${responseMode.type === "plain"
@@ -802,7 +802,7 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
                 <div className="text-left">
                   <div className="font-medium">プレーン回答</div>
                   <div className="text-[10px] text-white/50">
-                    Geminiの直接回答
+                    CueMeの直接回答
                   </div>
                 </div>
               </button>
