@@ -14,6 +14,7 @@ import {
 import QueueCommands from "../components/Queue/QueueCommands";
 import QuestionSidePanel from "../components/AudioListener/QuestionSidePanel";
 import { DetectedQuestion, AudioStreamState } from "../types/audio-stream";
+import { useVerticalResize } from "../hooks/useVerticalResize";
 
 interface ResponseMode {
   type: "plain" | "qna";
@@ -47,6 +48,7 @@ const Queue: React.FC<QueueProps> = ({ setView, onSignOut }) => {
   >([]);
   const [chatLoading, setChatLoading] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isQuestionPanelOpen, setIsQuestionPanelOpen] = useState(true);
   const chatInputRef = useRef<HTMLInputElement>(null);
 
   // Profile dropdown state
@@ -63,6 +65,18 @@ const Queue: React.FC<QueueProps> = ({ setView, onSignOut }) => {
   // Audio stream state
   const [detectedQuestions, setDetectedQuestions] = useState<DetectedQuestion[]>([]);
   const [audioStreamState, setAudioStreamState] = useState<AudioStreamState | null>(null);
+
+  // Vertical resize hooks
+  const chatResize = useVerticalResize({ 
+    minHeight: 200, 
+    maxHeight: 600, 
+    initialHeight: 200 
+  });
+  const questionResize = useVerticalResize({ 
+    minHeight: 200, 
+    maxHeight: 600, 
+    initialHeight: 320 
+  });
 
   const barRef = useRef<HTMLDivElement>(null);
 
@@ -329,6 +343,14 @@ const Queue: React.FC<QueueProps> = ({ setView, onSignOut }) => {
     setAudioStreamState(state);
   };
 
+  // Auto-reopen question panel when recording starts
+  useEffect(() => {
+    if (audioStreamState?.isListening && !isQuestionPanelOpen) {
+      console.log('[Queue] Auto-reopening question panel for new recording session');
+      setIsQuestionPanelOpen(true);
+    }
+  }, [audioStreamState?.isListening, isQuestionPanelOpen]);
+
   const answersCacheRef = useRef<Map<string, { response: string; timestamp: number }>>(new Map());
 
   const handleAnswerQuestion = async (question: DetectedQuestion, collectionId?: string): Promise<{ response: string; timestamp: number }> => {
@@ -573,7 +595,10 @@ const Queue: React.FC<QueueProps> = ({ setView, onSignOut }) => {
 
           {/* Conditional Chat Interface - Wider and centered relative to floating bar system */}
           {isChatOpen && (
-            <div className="mt-4 w-full max-w-2xl liquid-glass chat-container p-4 flex flex-col relative">
+            <div 
+              className="mt-4 w-full max-w-2xl liquid-glass chat-container p-4 flex flex-col relative"
+              style={{ height: `${chatResize.height}px` }}
+            >
               {/* Close Button */}
               <button
                 onClick={() => setIsChatOpen(false)}
@@ -607,103 +632,120 @@ const Queue: React.FC<QueueProps> = ({ setView, onSignOut }) => {
                 />
               </div>
 
-              {chatMessages.length === 0 ? (
-                <div className="text-sm text-white/80 text-center mt-8 pr-8 mb-3">
-                  <img src="/logo.png" alt="CueMe Logo" className="w-5 h-5 mx-auto mb-2" />
-                  CueMeとチャット
-                  <br />
-                  <span className="text-xs text-white/50">
-                    スクリーンショットを撮る (Cmd+H) で自動分析
-                  </span>
-                </div>
-              ) : (
-                <div className="flex-1 overflow-y-auto mb-3 max-h-64">
-                  {chatMessages.map((msg, idx) => (
-                    <div
-                      key={idx}
-                      className={`w-full flex ${msg.role === "user" ? "justify-end" : "justify-start"
-                        } mb-3`}
-                    >
-                      <div
-                        className={`max-w-[80%] px-3 py-1.5 rounded-xl text-xs border ${msg.role === "user"
-                          ? "bg-gray-800/60 backdrop-blur-md text-gray-100 ml-12 border-gray-600/40"
-                          : "morphism-dropdown text-white/90 mr-12"
-                          }`}
-                        style={{ wordBreak: "break-word", lineHeight: "1.4" }}
-                      >
-                        {msg.text}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {chatLoading && (
-                <div className="flex justify-start mb-3">
-                  <div className="morphism-dropdown text-white/80 px-3 py-1.5 rounded-xl text-xs mr-12">
-                    <span className="inline-flex items-center">
-                      <span className="animate-pulse text-white/40">●</span>
-                      <span className="animate-pulse animation-delay-200 text-white/40">
-                        ●
-                      </span>
-                      <span className="animate-pulse animation-delay-400 text-white/40">
-                        ●
-                      </span>
-                      <span className="ml-2">Geminiが考え中...</span>
+              {/* Chat Messages Area - Flexible height */}
+              <div className="flex-1 flex flex-col min-h-0">
+                {chatMessages.length === 0 ? (
+                  <div className="text-sm text-white/80 text-center mt-8 pr-8 mb-3">
+                    <img src="/logo.png" alt="CueMe Logo" className="w-5 h-5 mx-auto mb-2" />
+                    CueMeとチャット
+                    <br />
+                    <span className="text-xs text-white/50">
+                      スクリーンショットを撮る (Cmd+H) で自動分析
                     </span>
                   </div>
-                </div>
-              )}
-              <form
-                className="flex gap-2 items-center glass-content"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  handleChatSend();
-                }}
-              >
-                <input
-                  ref={chatInputRef}
-                  className="flex-1 morphism-input px-3 py-2 text-white placeholder-white/60 text-xs focus:outline-none transition-all duration-200"
-                  placeholder="メッセージを入力..."
-                  value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
-                  disabled={chatLoading}
-                />
-                <button
-                  type="submit"
-                  className="p-2 morphism-button flex items-center justify-center disabled:opacity-50"
-                  disabled={chatLoading || !chatInput.trim()}
-                  tabIndex={-1}
-                  aria-label="送信"
+                ) : (
+                  <div className="flex-1 overflow-y-auto mb-3">
+                    {chatMessages.map((msg, idx) => (
+                      <div
+                        key={idx}
+                        className={`w-full flex ${msg.role === "user" ? "justify-end" : "justify-start"
+                          } mb-3`}
+                      >
+                        <div
+                          className={`max-w-[80%] px-3 py-1.5 rounded-xl text-xs border ${msg.role === "user"
+                            ? "bg-gray-800/60 backdrop-blur-md text-gray-100 ml-12 border-gray-600/40"
+                            : "morphism-dropdown text-white/90 mr-12"
+                            }`}
+                          style={{ wordBreak: "break-word", lineHeight: "1.4" }}
+                        >
+                          {msg.text}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {chatLoading && (
+                  <div className="flex justify-start mb-3">
+                    <div className="morphism-dropdown text-white/80 px-3 py-1.5 rounded-xl text-xs mr-12">
+                      <span className="inline-flex items-center">
+                        <span className="animate-pulse text-white/40">●</span>
+                        <span className="animate-pulse animation-delay-200 text-white/40">
+                          ●
+                        </span>
+                        <span className="animate-pulse animation-delay-400 text-white/40">
+                          ●
+                        </span>
+                        <span className="ml-2">Geminiが考え中...</span>
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Input Form - Fixed at bottom with consistent spacing */}
+              <div className="mt-3">
+                <form
+                  className="flex gap-2 items-center glass-content"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    handleChatSend();
+                  }}
                 >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    strokeWidth={2}
-                    stroke="white"
-                    className="w-4 h-4"
+                  <input
+                    ref={chatInputRef}
+                    className="flex-1 morphism-input px-3 py-2 text-white placeholder-white/60 text-xs focus:outline-none transition-all duration-200"
+                    placeholder="メッセージを入力..."
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    disabled={chatLoading}
+                  />
+                  <button
+                    type="submit"
+                    className="p-2 morphism-button flex items-center justify-center disabled:opacity-50"
+                    disabled={chatLoading || !chatInput.trim()}
+                    tabIndex={-1}
+                    aria-label="送信"
                   >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M4.5 19.5l15-7.5-15-7.5v6l10 1.5-10 1.5v6z"
-                    />
-                  </svg>
-                </button>
-              </form>
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      strokeWidth={2}
+                      stroke="white"
+                      className="w-4 h-4"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M4.5 19.5l15-7.5-15-7.5v6l10 1.5-10 1.5v6z"
+                      />
+                    </svg>
+                  </button>
+                </form>
+              </div>
+              
+              {/* Resize Handle */}
+              <chatResize.ResizeHandle />
             </div>
           )}
           
           {/* Question Panel - Wider and centered relative to floating bar system */}
-          {(detectedQuestions.length > 0 || audioStreamState?.isListening) && (
-            <div className="mt-4 w-full max-w-2xl">
+          {isQuestionPanelOpen && (detectedQuestions.length > 0 || audioStreamState?.isListening) && (
+            <div 
+              className="mt-4 w-full max-w-2xl relative"
+              style={{ height: `${questionResize.height}px` }}
+            >
               <QuestionSidePanel
                 questions={detectedQuestions}
                 audioStreamState={audioStreamState}
                 onAnswerQuestion={handleAnswerQuestion}
                 responseMode={responseMode}
-                className="w-full"
+                className="w-full h-full"
+                onClose={() => setIsQuestionPanelOpen(false)}
               />
+              
+              {/* Resize Handle */}
+              <questionResize.ResizeHandle />
             </div>
           )}
         </div>

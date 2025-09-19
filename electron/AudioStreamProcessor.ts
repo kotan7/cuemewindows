@@ -133,6 +133,9 @@ export class AudioStreamProcessor extends EventEmitter {
       this.currentAudioData = [];
       this.wordCount = 0;
       
+      // Clear the question buffer to ensure fresh start for next recording session
+      this.clearQuestions();
+      
       this.emit('state-changed', { ...this.state });
       console.log('[AudioStreamProcessor] Stopped listening');
       

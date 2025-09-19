@@ -12,6 +12,7 @@ interface QuestionSidePanelProps {
     collectionName?: string;
   };
   className?: string;
+  onClose?: () => void;
 }
 
 interface QuestionItemProps {
@@ -52,7 +53,8 @@ const QuestionSidePanel: React.FC<QuestionSidePanelProps> = ({
   audioStreamState,
   onAnswerQuestion,
   responseMode = { type: "plain" },
-  className = ""
+  className = "",
+  onClose
 }) => {
   const [selectedQuestionId, setSelectedQuestionId] = useState<string | null>(null);
   const [generatingAnswer, setGeneratingAnswer] = useState(false);
@@ -122,11 +124,35 @@ const QuestionSidePanel: React.FC<QuestionSidePanelProps> = ({
 
   return (
     <div className={`w-full ${className}`}>
+      {/* Close Button */}
+      {onClose && (
+        <button
+          onClick={onClose}
+          className="absolute top-2 right-2 w-6 h-6 rounded-full morphism-button flex items-center justify-center z-10"
+          type="button"
+          title="閉じる"
+        >
+          <svg
+            className="w-3 h-3 text-white"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M6 18L18 6M6 6l12 12"
+            />
+          </svg>
+        </button>
+      )}
+      
       {/* Two Panel Layout */}
-      <div className="flex gap-4 h-80">
+      <div className="flex gap-2 h-full">
         {/* Left Panel - Questions */}
-        <div className="flex-1 liquid-glass chat-container p-4">
-          <div className="flex items-center gap-2 mb-3">
+        <div className="flex-1 liquid-glass chat-container p-4 flex flex-col">
+          <div className="flex items-center gap-2 mb-3 flex-shrink-0">
             <MessageSquare className="w-4 h-4 text-green-600" />
             <span className="text-sm font-medium text-white/90">
               検出された質問
@@ -144,60 +170,68 @@ const QuestionSidePanel: React.FC<QuestionSidePanelProps> = ({
             )}
           </div>
           
-          {refinedQuestions.length === 0 ? (
-            <div className="text-center py-8">
-              <MessageSquare className="w-8 h-8 text-white/30 mx-auto mb-2" />
-              <p className="text-xs text-white/50">
-                質問を検出中...
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-1 max-h-64 overflow-y-auto">
-              {refinedQuestions.map((question) => (
-                <QuestionItem
-                  key={question.id}
-                  question={question}
-                  isSelected={selectedQuestionId === question.id}
-                  onClick={() => handleQuestionClick(question)}
-                />
-              ))}
-            </div>
-          )}
+          <div className="flex-1 flex flex-col min-h-0">
+            {refinedQuestions.length === 0 ? (
+              <div className="flex-1 flex items-center justify-center">
+                <div className="text-center">
+                  <MessageSquare className="w-8 h-8 text-white/30 mx-auto mb-2" />
+                  <p className="text-xs text-white/50">
+                    質問を検出中...
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-1 overflow-y-auto flex-1">
+                {refinedQuestions.map((question) => (
+                  <QuestionItem
+                    key={question.id}
+                    question={question}
+                    isSelected={selectedQuestionId === question.id}
+                    onClick={() => handleQuestionClick(question)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Right Panel - Answer */}
-        <div className="flex-1 liquid-glass chat-container p-4">
-          <div className="flex items-center gap-2 mb-3">
+        <div className="flex-1 liquid-glass chat-container p-4 flex flex-col">
+          <div className="flex items-center gap-2 mb-3 flex-shrink-0">
             <img src="/logo.png" alt="CueMe Logo" className="w-4 h-4" />
             <span className="text-sm font-medium text-white/90">AI回答</span>
           </div>
           
-          {!selectedQuestionId ? (
-            <div className="text-center py-8">
-              <p className="text-xs text-white/50">
-                左の質問をクリックして回答を表示
-              </p>
-            </div>
-          ) : generatingAnswer ? (
-            <div className="flex items-center justify-center py-8">
-              <span className="text-xs text-white/70 mr-2">回答を生成中</span>
-              <div className="flex gap-0.5">
-                <div className="w-1 h-1 bg-white/70 rounded-full animate-bounce" style={{animationDelay: '0ms'}}></div>
-                <div className="w-1 h-1 bg-white/70 rounded-full animate-bounce" style={{animationDelay: '150ms'}}></div>
-                <div className="w-1 h-1 bg-white/70 rounded-full animate-bounce" style={{animationDelay: '300ms'}}></div>
+          <div className="flex-1 flex flex-col min-h-0">
+            {!selectedQuestionId ? (
+              <div className="flex-1 flex items-center justify-center">
+                <p className="text-xs text-white/50">
+                  左の質問をクリックして回答を表示
+                </p>
               </div>
-            </div>
-          ) : currentAnswer ? (
-            <div className="text-xs text-white/80 leading-relaxed whitespace-pre-wrap max-h-64 overflow-y-auto">
-              {currentAnswer}
-            </div>
-          ) : (
-            <div className="text-center py-8">
-              <p className="text-xs text-white/50">
-                回答の生成に失敗しました
-              </p>
-            </div>
-          )}
+            ) : generatingAnswer ? (
+              <div className="flex-1 flex items-center justify-center">
+                <div className="flex items-center">
+                  <span className="text-xs text-white/70 mr-2">回答を生成中</span>
+                  <div className="flex gap-0.5">
+                    <div className="w-1 h-1 bg-white/70 rounded-full animate-bounce" style={{animationDelay: '0ms'}}></div>
+                    <div className="w-1 h-1 bg-white/70 rounded-full animate-bounce" style={{animationDelay: '150ms'}}></div>
+                    <div className="w-1 h-1 bg-white/70 rounded-full animate-bounce" style={{animationDelay: '300ms'}}></div>
+                  </div>
+                </div>
+              </div>
+            ) : currentAnswer ? (
+              <div className="text-xs text-white/80 leading-relaxed whitespace-pre-wrap overflow-y-auto flex-1">
+                {currentAnswer}
+              </div>
+            ) : (
+              <div className="flex-1 flex items-center justify-center">
+                <p className="text-xs text-white/50">
+                  回答の生成に失敗しました
+                </p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
