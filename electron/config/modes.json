@@ -88,7 +88,7 @@
   },
   {
     "key": "telesales",
-    "displayName": "テレアポモード（高応答）",
+    "displayName": "テレアポ",
     "tone": "sales",
     "formality": "keigo",
     "length": "short",

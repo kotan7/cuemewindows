@@ -144,8 +144,24 @@ JSONオブジェクトのみを返し、マークダウン形式やコードブ�
         rules_minus: ["誇大表現NG", "根拠なき比較NG"]
       },
       {
+        key: "telesales",
+        displayName: "テレアポ",
+        tone: "sales",
+        formality: "keigo",
+        length: "short",
+        sentence_max: 18,
+        bullets_max: 4,
+        paragraphs_max: 2,
+        examples_max: 0,
+        code_ok: false,
+        rationale: "hidden",
+        structure: ["opener", "hook_question", "value_15s", "cta"],
+        rules_plus: ["1文は短く", "反論が来たら即『型』で返す"],
+        rules_minus: ["詰問口調NG", "圧迫クロージングNG"]
+      },
+      {
         key: "support",
-        displayName: "サポート",
+        displayName: "カスタマーサポート",
         tone: "support",
         formality: "keigo",
         length: "standard",

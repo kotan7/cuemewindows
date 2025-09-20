@@ -4,8 +4,11 @@ import path from "path"
 // Load environment variables FIRST before any other imports
 // Try multiple approaches to load .env file for better reliability
 const envPaths = [
+  path.join(process.cwd(), '.env.local'),
   path.join(process.cwd(), '.env'),
+  path.join(process.resourcesPath || process.cwd(), '.env.local'),
   path.join(process.resourcesPath || process.cwd(), '.env'),
+  '.env.local',
   '.env'
 ]
 
@@ -14,6 +17,7 @@ for (const envPath of envPaths) {
   try {
     const result = dotenv.config({ path: envPath })
     if (!result.error) {
+      console.log(`[ENV] Successfully loaded environment from: ${envPath}`)
       envLoaded = true
       break
     }
@@ -23,6 +27,7 @@ for (const envPath of envPaths) {
 }
 
 if (!envLoaded) {
+  console.log('[ENV] No .env file found, using default dotenv.config()')
   dotenv.config() // Fallback to default
 }
 

@@ -689,7 +689,7 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
 
         {/* Response Mode Dropdown */}
         <div className="flex items-center gap-2">
-          <span className="text-[11px] leading-none">モード</span>
+          <span className="text-[11px] leading-none">ファイル</span>
           <div className="relative" ref={dropdownRef}>
             <button
               ref={triggerRef}
@@ -700,7 +700,7 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
               {responseMode.type === "plain" ? (
                 <>
                   <Bot className="w-3 h-3" />
-                  <span>プレーン</span>
+                  <span>デフォルト</span>
                 </>
               ) : (
                 <>
@@ -792,7 +792,8 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
             <div className="p-1 overflow-y-auto morphism-scrollbar h-full">
               {/* Plain Mode Option */}
               <button
-                className={`w-full flex items-center gap-2 px-3 py-2 text-[11px] rounded-md transition-colors ${responseMode.type === "plain"
+                className={`w-full flex items-center gap-2 px-3 py-2 text-[11px] rounded-md transition-colors ${
+                  responseMode.type === "plain"
                     ? "bg-white/20 text-white"
                     : "text-white/70 hover:bg-white/10 hover:text-white"
                   }`}
@@ -800,12 +801,14 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
               >
                 <Bot className="w-4 h-4" />
                 <div className="text-left">
-                  <div className="font-medium">プレーン回答</div>
+                  <div className="font-medium">デフォルト回答</div>
                   <div className="text-[10px] text-white/50">
                     CueMeの直接回答
                   </div>
                 </div>
               </button>
+
+
 
               {/* Separator */}
               {isAuthenticated && <div className="h-px bg-white/10 my-1" />}

@@ -33,7 +33,7 @@ const ProfileModeSelector: React.FC<{
     try {
       const modes = await window.electronAPI.invoke('get-available-modes');
       // Filter to show only the most common modes
-      const compactModes = ['interview', 'meeting', 'sales', 'support'];
+      const compactModes = ['interview', 'meeting', 'sales', 'telesales', 'support'];
       const filteredModes = modes.filter((mode: ModeOption) => 
         compactModes.includes(mode.key)
       );

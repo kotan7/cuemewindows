@@ -6,7 +6,7 @@ interface QuestionSidePanelProps {
   questions: DetectedQuestion[];
   audioStreamState: AudioStreamState | null;
   onAnswerQuestion: (question: DetectedQuestion, collectionId?: string) => Promise<{ response: string; timestamp: number }>;
-  responseMode?: {
+  responseMode: {
     type: "plain" | "qna";
     collectionId?: string;
     collectionName?: string;
