@@ -97,31 +97,21 @@ jobs:
         run: |
           echo "Setting up macOS keychain and certificates..."
           
-          # Create a custom keychain
-          KEYCHAIN_PATH="$HOME/build.keychain"
-          KEYCHAIN_PASSWORD="build_keychain_password"
-          
-          echo "Creating keychain at $KEYCHAIN_PATH"
-          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          
-          echo "Setting keychain settings"
-          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
-          
-          echo "Unlocking keychain"
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          
-          echo "Adding keychain to search list"
-          security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | sed s/\"//g)
+          # Create and unlock keychain
+          security create-keychain -p "" temp.keychain
+          security set-keychain-settings temp.keychain
+          security unlock-keychain -p "" temp.keychain
+          security list-keychains -d user -s temp.keychain
           
           if [ -n "$CSC_LINK" ]; then
             echo "Importing certificate from CSC_LINK"
             # Decode base64 certificate and import
             echo "$CSC_LINK" | base64 --decode > certificate.p12
-            security import certificate.p12 -k "$KEYCHAIN_PATH" -P "$CSC_KEY_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+            security import certificate.p12 -k temp.keychain -P "$CSC_KEY_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
             rm certificate.p12
             
             echo "Setting partition list for codesign"
-            security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+            security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "" temp.keychain
           else
             echo "Warning: CSC_LINK not provided, skipping certificate import"
           fi

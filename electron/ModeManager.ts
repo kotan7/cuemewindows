@@ -161,7 +161,7 @@ JSONオブジェクトのみを返し、マークダウン形式やコードブ�
       },
       {
         key: "support",
-        displayName: "カスタマーサポート",
+        displayName: "ヘルプ",
         tone: "support",
         formality: "keigo",
         length: "standard",

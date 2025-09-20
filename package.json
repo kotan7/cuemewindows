@@ -1,6 +1,6 @@
 {
-  "name": "interview-coder",
-  "version": "1.0.1",
+  "name": "CueMe",
+  "version": "1.0.3",
   "main": "./dist-electron/main.js",
   "scripts": {
     "clean": "rimraf dist dist-electron",
@@ -55,7 +55,7 @@
       "entitlements": "assets/entitlements.mac.plist",
       "entitlementsInherit": "assets/entitlements.mac.plist",
       "notarize": {
-        "teamId": "YOUR_TEAM_ID"
+        "teamId": "4KS6YS23KT"
       }
     },
     "win": {

@@ -34,7 +34,7 @@ const ProfileModeSelector: React.FC<{
       const modes = await window.electronAPI.invoke('get-available-modes');
       // Filter to show only the most common modes
       const compactModes = ['interview', 'meeting', 'sales', 'telesales', 'support'];
-      const filteredModes = modes.filter((mode: ModeOption) => 
+      const filteredModes = modes.filter((mode: ModeOption) =>
         compactModes.includes(mode.key)
       );
       setAvailableModes(filteredModes);
@@ -90,7 +90,7 @@ const ProfileModeSelector: React.FC<{
             className="fixed inset-0 z-10"
             onClick={() => setIsOpen(false)}
           />
-          
+
           {/* Dropdown Content */}
           <div className="absolute top-0 right-full mr-6 w-32 morphism-dropdown shadow-lg z-20 max-h-48 overflow-y-auto">
             {availableModes.map((mode) => {
@@ -102,9 +102,8 @@ const ProfileModeSelector: React.FC<{
                     onModeChange(mode.key);
                     setIsOpen(false);
                   }}
-                  className={`w-full px-3 py-2 text-left text-xs hover:bg-white/10 focus:outline-none focus:bg-white/10 transition-colors flex items-center gap-2 ${
-                    mode.key === currentMode ? 'text-white bg-white/10' : 'text-white/80'
-                  }`}
+                  className={`w-full px-3 py-2 text-left text-xs hover:bg-white/10 focus:outline-none focus:bg-white/10 transition-colors flex items-center gap-2 ${mode.key === currentMode ? 'text-white bg-white/10' : 'text-white/80'
+                    }`}
                 >
                   <Icon className="w-3 h-3" />
                   <div>
@@ -164,7 +163,7 @@ const Queue: React.FC<QueueProps> = ({ setView, onSignOut }) => {
   const [responseMode, setResponseMode] = useState<ResponseMode>({
     type: "plain",
   });
-  
+
   // Mode state for new mode functionality
   const [currentMode, setCurrentMode] = useState('interview'); // デフォルトは面接モード
 
@@ -173,15 +172,15 @@ const Queue: React.FC<QueueProps> = ({ setView, onSignOut }) => {
   const [audioStreamState, setAudioStreamState] = useState<AudioStreamState | null>(null);
 
   // Vertical resize hooks
-  const chatResize = useVerticalResize({ 
-    minHeight: 200, 
-    maxHeight: 600, 
-    initialHeight: 200 
+  const chatResize = useVerticalResize({
+    minHeight: 200,
+    maxHeight: 600,
+    initialHeight: 200
   });
-  const questionResize = useVerticalResize({ 
-    minHeight: 200, 
-    maxHeight: 600, 
-    initialHeight: 320 
+  const questionResize = useVerticalResize({
+    minHeight: 200,
+    maxHeight: 600,
+    initialHeight: 320
   });
 
   const barRef = useRef<HTMLDivElement>(null);
@@ -462,7 +461,7 @@ const Queue: React.FC<QueueProps> = ({ setView, onSignOut }) => {
   const handleAnswerQuestion = async (question: DetectedQuestion, collectionId?: string): Promise<{ response: string; timestamp: number }> => {
     try {
       console.log('[Queue] Answering question:', question.text, 'with collection:', collectionId);
-      
+
       // Memoization: return cached response if present
       const cached = answersCacheRef.current.get(question.id);
       if (cached) {
@@ -477,12 +476,12 @@ const Queue: React.FC<QueueProps> = ({ setView, onSignOut }) => {
       }
 
       const result = await (window.electronAPI as any).audioStreamAnswerQuestion(
-        question.text, 
+        question.text,
         collectionId
       );
-      
+
       console.log('[Queue] Question answered:', result);
-      
+
       // Show answer in chat
       setChatMessages(prev => [
         ...prev,
@@ -493,10 +492,10 @@ const Queue: React.FC<QueueProps> = ({ setView, onSignOut }) => {
       // Cache the result
       answersCacheRef.current.set(question.id, result);
       return result;
-      
+
     } catch (error: any) {
       console.error('[Queue] Failed to answer question:', error);
-      
+
       // Handle usage limit errors
       if (error.message && (
         error.message.includes('Usage limit exceeded') ||
@@ -638,7 +637,7 @@ const Queue: React.FC<QueueProps> = ({ setView, onSignOut }) => {
                           onModeChange={setCurrentMode}
                         />
                       </div>
-                      
+
                       <button
                         onClick={handleSettings}
                         className="w-full px-3 py-2 text-left text-xs text-white/80 hover:text-white hover:bg-white/10 flex items-center gap-2 transition-colors rounded-md"
@@ -710,7 +709,7 @@ const Queue: React.FC<QueueProps> = ({ setView, onSignOut }) => {
 
           {/* Conditional Chat Interface - Wider and centered relative to floating bar system */}
           {isChatOpen && (
-            <div 
+            <div
               className="mt-4 w-full max-w-2xl liquid-glass chat-container p-4 flex flex-col relative"
               style={{ height: `${chatResize.height}px` }}
             >
@@ -829,15 +828,15 @@ const Queue: React.FC<QueueProps> = ({ setView, onSignOut }) => {
                   </button>
                 </form>
               </div>
-              
+
               {/* Resize Handle */}
               <chatResize.ResizeHandle />
             </div>
           )}
-          
+
           {/* Question Panel - Wider and centered relative to floating bar system */}
           {isQuestionPanelOpen && (detectedQuestions.length > 0 || audioStreamState?.isListening) && (
-            <div 
+            <div
               className="mt-4 w-full max-w-2xl relative"
               style={{ height: `${questionResize.height}px` }}
             >
@@ -849,7 +848,7 @@ const Queue: React.FC<QueueProps> = ({ setView, onSignOut }) => {
                 className="w-full h-full"
                 onClose={() => setIsQuestionPanelOpen(false)}
               />
-              
+
               {/* Resize Handle */}
               <questionResize.ResizeHandle />
             </div>

@@ -801,7 +801,7 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
               >
                 <Bot className="w-4 h-4" />
                 <div className="text-left">
-                  <div className="font-medium">デフォルト回答</div>
+                  <div className="font-medium">デフォルト</div>
                   <div className="text-[10px] text-white/50">
                     CueMeの直接回答
                   </div>

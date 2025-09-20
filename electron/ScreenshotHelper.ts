@@ -78,7 +78,7 @@ export class ScreenshotHelper {
     hideMainWindow: () => void,
     showMainWindow: () => void
   ): Promise<string> {
-    hideMainWindow()
+    // hideMainWindow()
     let screenshotPath = ""
 
     if (this.view === "queue") {
