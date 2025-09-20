@@ -97,26 +97,57 @@ jobs:
         run: |
           echo "Setting up macOS keychain and certificates..."
           
-          # Create and unlock keychain
-          security create-keychain -p "" temp.keychain
-          security set-keychain-settings temp.keychain
-          security unlock-keychain -p "" temp.keychain
-          security list-keychains -d user -s temp.keychain
+          # Define keychain path
+          KEYCHAIN_PATH="$HOME/Library/Keychains/build.keychain"
+          KEYCHAIN_PASSWORD=""
+          
+          # Create keychain
+          echo "Creating keychain at $KEYCHAIN_PATH"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          
+          # Set keychain settings
+          echo "Setting keychain settings"
+          security set-keychain-settings "$KEYCHAIN_PATH"
+          
+          # Unlock keychain
+          echo "Unlocking keychain"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          
+          # Add keychain to search list and set as default
+          echo "Adding keychain to search list"
+          security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | sed s/\"//g)
+          security default-keychain -s "$KEYCHAIN_PATH"
           
           if [ -n "$CSC_LINK" ]; then
             echo "Importing certificate from CSC_LINK"
             # Decode base64 certificate and import
             echo "$CSC_LINK" | base64 --decode > certificate.p12
-            security import certificate.p12 -k temp.keychain -P "$CSC_KEY_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+            security import certificate.p12 -k "$KEYCHAIN_PATH" -P "$CSC_KEY_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
             rm certificate.p12
             
             echo "Setting partition list for codesign"
-            security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "" temp.keychain
+            security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+            
+            echo "Verifying certificate import"
+            security find-identity -v -p codesigning "$KEYCHAIN_PATH"
           else
             echo "Warning: CSC_LINK not provided, skipping certificate import"
           fi
           
           echo "Keychain setup completed successfully"
+
+      - name: Verify macOS signing setup
+        if: matrix.platform == 'mac'
+        run: |
+          echo "Verifying macOS signing setup..."
+          echo "Available keychains:"
+          security list-keychains -d user
+          echo "Default keychain:"
+          security default-keychain
+          echo "Available signing identities:"
+          security find-identity -v -p codesigning
+          echo "CSC_LINK present: $([[ -n "${{ secrets.CSC_LINK }}" ]] && echo "Yes" || echo "No")"
+          echo "CSC_KEY_PASSWORD present: $([[ -n "${{ secrets.CSC_KEY_PASSWORD }}" ]] && echo "Yes" || echo "No")"
 
       - name: Build and release for platform
         shell: bash

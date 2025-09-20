@@ -116,6 +116,7 @@
   "license": "ISC",
   "description": "AI-powered interview assistant for coding interviews",
   "devDependencies": {
+    "@electron-forge/publisher-github": "^7.9.0",
     "@types/color": "^4.2.0",
     "@types/diff": "^6.0.0",
     "@types/electron": "^1.4.38",
@@ -144,7 +145,6 @@
     "wait-on": "^8.0.1"
   },
   "dependencies": {
-    "dotenv": "^16.4.5",
     "@google/genai": "^0.12.0",
     "@google/generative-ai": "^0.2.1",
     "@radix-ui/react-dialog": "^1.1.2",
@@ -157,6 +157,7 @@
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "diff": "^7.0.0",
+    "dotenv": "^16.4.5",
     "form-data": "^4.0.1",
     "lucide-react": "^0.460.0",
     "openai": "^5.15.0",
