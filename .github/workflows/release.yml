@@ -96,16 +96,52 @@ jobs:
         run: |
           if [ -n "$CSC_LINK" ]; then
             echo "Setting up macOS code signing..."
-            echo $CSC_LINK | base64 -d > certificate.p12
+            
+            # Decode certificate with better error handling
+            echo "Decoding certificate..."
+            if ! echo "$CSC_LINK" | base64 -d > certificate.p12; then
+              echo "Error: Failed to decode CSC_LINK. Please check if it's valid base64."
+              exit 1
+            fi
+            
+            # Check if the decoded file is valid
+            echo "Checking certificate file..."
+            if [ ! -s certificate.p12 ]; then
+              echo "Error: Certificate file is empty after decoding."
+              exit 1
+            fi
+            
+            # Verify it's a valid P12 file
+            if ! file certificate.p12 | grep -q "PKCS"; then
+              echo "Error: Decoded file doesn't appear to be a valid PKCS#12 certificate."
+              echo "File type: $(file certificate.p12)"
+              exit 1
+            fi
+            
+            echo "Creating keychain..."
             security create-keychain -p "" build.keychain 
-            security import certificate.p12 -k ~/Library/Keychains/build.keychain -P $CSC_KEY_PASSWORD -T /usr/bin/codesign
+            
+            echo "Importing certificate..."
+            if ! security import certificate.p12 -k ~/Library/Keychains/build.keychain -P "$CSC_KEY_PASSWORD" -T /usr/bin/codesign; then
+              echo "Error: Failed to import certificate. Please check:"
+              echo "1. Certificate is a valid .p12 file"
+              echo "2. CSC_KEY_PASSWORD is correct"
+              echo "3. Certificate is not expired"
+              rm certificate.p12
+              exit 1
+            fi
+            
+            echo "Configuring keychain..."
             security list-keychains -s ~/Library/Keychains/build.keychain
             security default-keychain -s ~/Library/Keychains/build.keychain
             security unlock-keychain -p "" ~/Library/Keychains/build.keychain
             security set-keychain-settings ~/Library/Keychains/build.keychain
+            
+            echo "Verifying signing identities..."
             security find-identity -v
+            
             rm certificate.p12
-            echo "macOS code signing setup completed"
+            echo "macOS code signing setup completed successfully"
           else
             echo "CSC_LINK not provided, skipping code signing setup"
           fi
