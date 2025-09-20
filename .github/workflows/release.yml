@@ -86,94 +86,34 @@ jobs:
           sudo apt-get install -y libnss3-dev libatk-bridge2.0-dev libdrm2 libxkbcommon-dev libxss1 libasound2-dev libxtst6 libatspi2.0-0 libdrm2 libxdamage1 libxrandr2 libgbm1 libxcomposite1 libxcursor1 libxi6 libgtk-3-0
           echo "Linux dependencies installed successfully"
 
-      - name: Setup macOS keychain and certificates
-        if: matrix.platform == 'mac'
+      # Import Apple API key for notarization on macOS
+      - name: Add macOS certs
+        if: matrix.platform == 'mac' && env.CSC_LINK != ''
+        run: |
+          echo $CSC_LINK | base64 -d > certificate.p12
+          security create-keychain -p "" build.keychain 
+          security import certificate.p12 -k ~/Library/Keychains/build.keychain -P $CSC_KEY_PASSWORD -T /usr/bin/codesign
+          security list-keychains -s ~/Library/Keychains/build.keychain
+          security default-keychain -s ~/Library/Keychains/build.keychain
+          security unlock-keychain -p "" ~/Library/Keychains/build.keychain
+          security set-keychain-settings ~/Library/Keychains/build.keychain
+          security find-identity -v
         env:
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+
+      - name: Build/release Electron app
+        uses: samuelmeuli/action-electron-builder@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          release: ${{ startsWith(github.ref, 'refs/tags/v') }}
+          build_script_name: build
+        env:
+          # macOS notarization API key
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          echo "Setting up macOS keychain and certificates..."
-          
-          # Define keychain path
-          KEYCHAIN_PATH="$HOME/Library/Keychains/build.keychain"
-          KEYCHAIN_PASSWORD=""
-          
-          # Create keychain
-          echo "Creating keychain at $KEYCHAIN_PATH"
-          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          
-          # Set keychain settings
-          echo "Setting keychain settings"
-          security set-keychain-settings "$KEYCHAIN_PATH"
-          
-          # Unlock keychain
-          echo "Unlocking keychain"
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          
-          # Add keychain to search list and set as default
-          echo "Adding keychain to search list"
-          security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | sed s/\"//g)
-          security default-keychain -s "$KEYCHAIN_PATH"
-          
-          if [ -n "$CSC_LINK" ]; then
-            echo "Importing certificate from CSC_LINK"
-            # Decode base64 certificate and import
-            echo "$CSC_LINK" | base64 --decode > certificate.p12
-            security import certificate.p12 -k "$KEYCHAIN_PATH" -P "$CSC_KEY_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
-            rm certificate.p12
-            
-            echo "Setting partition list for codesign"
-            security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-            
-            echo "Verifying certificate import"
-            security find-identity -v -p codesigning "$KEYCHAIN_PATH"
-          else
-            echo "Warning: CSC_LINK not provided, skipping certificate import"
-          fi
-          
-          echo "Keychain setup completed successfully"
-
-      - name: Verify macOS signing setup
-        if: matrix.platform == 'mac'
-        run: |
-          echo "Verifying macOS signing setup..."
-          echo "Available keychains:"
-          security list-keychains -d user
-          echo "Default keychain:"
-          security default-keychain
-          echo "Available signing identities:"
-          security find-identity -v -p codesigning
-          echo "CSC_LINK present: $([[ -n "${{ secrets.CSC_LINK }}" ]] && echo "Yes" || echo "No")"
-          echo "CSC_KEY_PASSWORD present: $([[ -n "${{ secrets.CSC_KEY_PASSWORD }}" ]] && echo "Yes" || echo "No")"
-
-      - name: Build and release for platform
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # macOS Code Signing
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-          # macOS Notarization
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          DEBUG: "electron-builder"
-        run: |
-          echo "Starting build for platform: ${{ matrix.platform }}"
-          echo "Node version: $(node --version)"
-          echo "npm version: $(npm --version)"
-          echo "Current directory: $(pwd)"
-
-          echo "Running npm run build..."
-          npm run build
-
-          echo "Running electron-builder..."
-          npm run release
-
-          echo "Build completed for ${{ matrix.platform }}"
 
       - name: Debug - List build artifacts
         shell: bash
