@@ -88,32 +88,56 @@ jobs:
 
       # Import Apple API key for notarization on macOS
       - name: Add macOS certs
-        if: matrix.platform == 'mac' && env.CSC_LINK != ''
-        run: |
-          echo $CSC_LINK | base64 -d > certificate.p12
-          security create-keychain -p "" build.keychain 
-          security import certificate.p12 -k ~/Library/Keychains/build.keychain -P $CSC_KEY_PASSWORD -T /usr/bin/codesign
-          security list-keychains -s ~/Library/Keychains/build.keychain
-          security default-keychain -s ~/Library/Keychains/build.keychain
-          security unlock-keychain -p "" ~/Library/Keychains/build.keychain
-          security set-keychain-settings ~/Library/Keychains/build.keychain
-          security find-identity -v
+        if: matrix.platform == 'mac'
         env:
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+        run: |
+          if [ -n "$CSC_LINK" ]; then
+            echo "Setting up macOS code signing..."
+            echo $CSC_LINK | base64 -d > certificate.p12
+            security create-keychain -p "" build.keychain 
+            security import certificate.p12 -k ~/Library/Keychains/build.keychain -P $CSC_KEY_PASSWORD -T /usr/bin/codesign
+            security list-keychains -s ~/Library/Keychains/build.keychain
+            security default-keychain -s ~/Library/Keychains/build.keychain
+            security unlock-keychain -p "" ~/Library/Keychains/build.keychain
+            security set-keychain-settings ~/Library/Keychains/build.keychain
+            security find-identity -v
+            rm certificate.p12
+            echo "macOS code signing setup completed"
+          else
+            echo "CSC_LINK not provided, skipping code signing setup"
+          fi
 
-      - name: Build/release Electron app
-        uses: samuelmeuli/action-electron-builder@v1
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          release: ${{ startsWith(github.ref, 'refs/tags/v') }}
-          build_script_name: build
+      - name: Build and release Electron app
+        shell: bash
         env:
-          # macOS notarization API key
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # macOS Code Signing
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          # macOS Notarization
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          echo "Building and releasing for platform: ${{ matrix.platform }}"
+          
+          # Run the build script
+          echo "Running build script..."
+          npm run build
+          
+          # Run electron-builder with platform-specific arguments
+          echo "Running electron-builder..."
+          if [ "${{ matrix.platform }}" = "mac" ]; then
+            npx electron-builder --mac --publish always
+          elif [ "${{ matrix.platform }}" = "win" ]; then
+            npx electron-builder --win --publish always
+          elif [ "${{ matrix.platform }}" = "linux" ]; then
+            npx electron-builder --linux --publish always
+          fi
+          
+          echo "Build and release completed for ${{ matrix.platform }}"
 
       - name: Debug - List build artifacts
         shell: bash
