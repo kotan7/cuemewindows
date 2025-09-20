@@ -86,6 +86,48 @@ jobs:
           sudo apt-get install -y libnss3-dev libatk-bridge2.0-dev libdrm2 libxkbcommon-dev libxss1 libasound2-dev libxtst6 libatspi2.0-0 libdrm2 libxdamage1 libxrandr2 libgbm1 libxcomposite1 libxcursor1 libxi6 libgtk-3-0
           echo "Linux dependencies installed successfully"
 
+      - name: Setup macOS keychain and certificates
+        if: matrix.platform == 'mac'
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          echo "Setting up macOS keychain and certificates..."
+          
+          # Create a custom keychain
+          KEYCHAIN_PATH="$HOME/build.keychain"
+          KEYCHAIN_PASSWORD="build_keychain_password"
+          
+          echo "Creating keychain at $KEYCHAIN_PATH"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          
+          echo "Setting keychain settings"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          
+          echo "Unlocking keychain"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          
+          echo "Adding keychain to search list"
+          security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | sed s/\"//g)
+          
+          if [ -n "$CSC_LINK" ]; then
+            echo "Importing certificate from CSC_LINK"
+            # Decode base64 certificate and import
+            echo "$CSC_LINK" | base64 --decode > certificate.p12
+            security import certificate.p12 -k "$KEYCHAIN_PATH" -P "$CSC_KEY_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+            rm certificate.p12
+            
+            echo "Setting partition list for codesign"
+            security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          else
+            echo "Warning: CSC_LINK not provided, skipping certificate import"
+          fi
+          
+          echo "Keychain setup completed successfully"
+
       - name: Build and release for platform
         shell: bash
         env:
