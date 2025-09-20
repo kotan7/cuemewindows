@@ -17,6 +17,7 @@ permissions:
 jobs:
   release:
     runs-on: ${{ matrix.os }}
+    environment: cueme
 
     strategy:
       fail-fast: false
