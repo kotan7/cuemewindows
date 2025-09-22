@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } from "react";
 import { createPortal } from "react-dom";
 import {
   LogOut,
@@ -40,16 +40,23 @@ interface QueueCommandsProps {
   onAudioStreamStateChange?: (state: AudioStreamState) => void;
 }
 
-const QueueCommands: React.FC<QueueCommandsProps> = ({
-  onTooltipVisibilityChange,
-  screenshots,
-  onChatToggle,
-  responseMode = { type: "plain" },
-  onResponseModeChange,
-  isAuthenticated = false,
-  onQuestionDetected,
-  onAudioStreamStateChange,
-}) => {
+export interface QueueCommandsRef {
+  stopListening: () => void;
+}
+
+const QueueCommands = forwardRef<QueueCommandsRef, QueueCommandsProps>((
+  {
+    onTooltipVisibilityChange,
+    screenshots,
+    onChatToggle,
+    responseMode = { type: "plain" },
+    onResponseModeChange,
+    isAuthenticated = false,
+    onQuestionDetected,
+    onAudioStreamStateChange,
+  },
+  ref
+) => {
   const [isTooltipVisible, setIsTooltipVisible] = useState(false);
   const tooltipRef = useRef<HTMLDivElement>(null);
   
@@ -80,6 +87,17 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
   const audioChunks = useRef<Blob[]>([]);
 
   // Remove all chat-related state, handlers, and the Dialog overlay from this file.
+
+  // Expose methods to parent component
+  useImperativeHandle(ref, () => ({
+    stopListening: () => {
+      if (isListening) {
+        setIsListening(false);
+        stopAudioCapture();
+        window.electronAPI.audioStreamStop().catch(console.error);
+      }
+    },
+  }), [isListening]);
 
   useEffect(() => {
     let tooltipHeight = 0;
@@ -863,6 +881,8 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
         )}
     </div>
   );
-};
+});
+
+QueueCommands.displayName = 'QueueCommands';
 
 export default QueueCommands;

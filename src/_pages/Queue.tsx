@@ -11,7 +11,7 @@ import {
   ToastVariant,
   ToastMessage,
 } from "../components/ui/toast";
-import QueueCommands from "../components/Queue/QueueCommands";
+import QueueCommands, { QueueCommandsRef } from "../components/Queue/QueueCommands";
 import QuestionSidePanel from "../components/AudioListener/QuestionSidePanel";
 import { DetectedQuestion, AudioStreamState } from "../types/audio-stream";
 import { useVerticalResize } from "../hooks/useVerticalResize";
@@ -170,6 +170,9 @@ const Queue: React.FC<QueueProps> = ({ setView, onSignOut }) => {
   // Audio stream state
   const [detectedQuestions, setDetectedQuestions] = useState<DetectedQuestion[]>([]);
   const [audioStreamState, setAudioStreamState] = useState<AudioStreamState | null>(null);
+  
+  // Ref to access QueueCommands methods
+  const queueCommandsRef = useRef<QueueCommandsRef>(null);
 
   // Vertical resize hooks
   const chatResize = useVerticalResize({
@@ -600,6 +603,7 @@ const Queue: React.FC<QueueProps> = ({ setView, onSignOut }) => {
           <div className="w-fit overflow-visible relative">
             <div className="flex items-center gap-2">
               <QueueCommands
+                ref={queueCommandsRef}
                 screenshots={screenshots}
                 onTooltipVisibilityChange={handleTooltipVisibilityChange}
                 onChatToggle={handleChatToggle}
@@ -846,7 +850,23 @@ const Queue: React.FC<QueueProps> = ({ setView, onSignOut }) => {
                 onAnswerQuestion={handleAnswerQuestion}
                 responseMode={responseMode}
                 className="w-full h-full"
-                onClose={() => setIsQuestionPanelOpen(false)}
+                onClose={() => {
+                  // Stop listening session if active
+                  if (audioStreamState?.isListening && queueCommandsRef.current?.stopListening) {
+                    queueCommandsRef.current.stopListening();
+                  }
+                  
+                  // Clear questions via backend
+                  if (window.electronAPI?.audioStreamClearQuestions) {
+                    window.electronAPI.audioStreamClearQuestions();
+                  }
+                  
+                  // Clear frontend questions state
+                  setDetectedQuestions([]);
+                  
+                  // Close the panel
+                  setIsQuestionPanelOpen(false);
+                }}
               />
 
               {/* Resize Handle */}
