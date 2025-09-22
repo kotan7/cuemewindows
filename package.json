@@ -107,6 +107,8 @@
     "publish": [
       {
         "provider": "github",
+        "owner": "itsukison",
+        "repo": "CueMeFinal",
         "releaseType": "release"
       }
     ]

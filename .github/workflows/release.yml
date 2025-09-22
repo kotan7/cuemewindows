@@ -124,8 +124,8 @@ jobs:
           security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | sed s/\"//g)
           
           echo "Importing certificate..."
-          # Import certificate with the password from package-mac-signed.sh
-          if ! security import ./certificate.p12 -k "$KEYCHAIN_PATH" -P "Rmwtclag\$1964" -T /usr/bin/codesign -T /usr/bin/security; then
+          # Import certificate with the password from secrets
+          if ! security import ./certificate.p12 -k "$KEYCHAIN_PATH" -P "${{ secrets.CSC_KEY_PASSWORD }}" -T /usr/bin/codesign -T /usr/bin/security; then
             echo "Error: Failed to import certificate. Please check:"
             echo "1. Certificate file ./certificate.p12 is valid"
             echo "2. Certificate password is correct"
@@ -147,11 +147,11 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # macOS Code Signing - using local certificate file
           CSC_LINK: "./certificate.p12"
-          CSC_KEY_PASSWORD: "Rmwtclag$1964"
-          # macOS Notarization - using hardcoded values from package-mac-signed.sh
-          APPLE_ID: "ployee.officialcontact@gmail.com"
-          APPLE_APP_SPECIFIC_PASSWORD: "kbfb-tuwf-eagw-bvzq"
-          APPLE_TEAM_ID: "4KS6YS23KT"
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          # macOS Notarization - using environment secrets
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           echo "Building and releasing for platform: ${{ matrix.platform }}"
           
