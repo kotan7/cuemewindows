@@ -16,6 +16,14 @@ export interface AudioStreamState {
     isProcessing: boolean;
     pendingQuestions: DetectedQuestion[];
   };
+  currentAudioSource: AudioSource | null;
+}
+
+export interface AudioSource {
+  id: string;
+  name: string;
+  type: 'microphone' | 'system';
+  available: boolean;
 }
 
 export interface AudioStreamConfig {

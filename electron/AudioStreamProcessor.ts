@@ -5,6 +5,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 import { QuestionDetector } from "./QuestionDetector";
+import { SystemAudioCapture, AudioSource } from "./SystemAudioCapture";
 import {
   AudioChunk,
   AudioStreamState,
@@ -19,6 +20,7 @@ export class AudioStreamProcessor extends EventEmitter {
   private config: AudioStreamConfig;
   private questionDetector: QuestionDetector;
   private openai: OpenAI;
+  private systemAudioCapture: SystemAudioCapture;
   
   // Audio processing
   private currentAudioData: Float32Array[] = [];
@@ -86,30 +88,76 @@ export class AudioStreamProcessor extends EventEmitter {
         lastBatchTime: 0,
         isProcessing: false,
         pendingQuestions: []
-      }
+      },
+      currentAudioSource: null
     };
 
-    console.log('[AudioStreamProcessor] Initialized with immediate question refinement');
+    // Initialize SystemAudioCapture
+    this.systemAudioCapture = new SystemAudioCapture({
+      sampleRate: this.config.sampleRate,
+      channelCount: 1,
+      bufferSize: 4096
+    });
+
+    // Setup system audio capture event listeners
+    this.setupSystemAudioEvents();
+
+    console.log('[AudioStreamProcessor] Initialized with immediate question refinement and system audio support');
   }
 
   /**
-   * Start always-on audio listening
+   * Start always-on audio listening with specified audio source
    */
-  public async startListening(): Promise<void> {
+  public async startListening(audioSourceId?: string): Promise<void> {
     if (this.state.isListening) {
       console.log('[AudioStreamProcessor] Already listening');
       return;
     }
 
     try {
+      // If audio source is specified and it's system audio, start system capture
+      if (audioSourceId && audioSourceId !== 'microphone') {
+        console.log('[AudioStreamProcessor] Starting system audio capture for source:', audioSourceId);
+        
+        try {
+          await this.systemAudioCapture.startCapture(audioSourceId);
+          const captureState = this.systemAudioCapture.getState();
+          this.state.currentAudioSource = captureState.currentSource;
+          
+        } catch (systemError) {
+          console.warn('[AudioStreamProcessor] System audio capture failed, falling back to microphone:', systemError);
+          
+          // Fallback to microphone
+          this.state.currentAudioSource = {
+            id: 'microphone',
+            name: 'Microphone (Fallback)',
+            type: 'microphone',
+            available: true
+          };
+          
+          // Emit a warning but don't fail completely
+          this.emit('error', new Error(`System audio failed, using microphone: ${(systemError as Error).message}`));
+        }
+      } else {
+        // Default to microphone (existing behavior)
+        this.state.currentAudioSource = {
+          id: 'microphone',
+          name: 'Microphone',
+          type: 'microphone',
+          available: true
+        };
+        console.log('[AudioStreamProcessor] Using microphone input (default)');
+      }
+
       this.state.isListening = true;
       this.state.lastActivityTime = Date.now();
       this.emit('state-changed', { ...this.state });
       
-      console.log('[AudioStreamProcessor] Started listening for audio');
+      console.log('[AudioStreamProcessor] Started listening for audio from:', this.state.currentAudioSource?.name);
       
     } catch (error) {
       this.state.isListening = false;
+      this.state.currentAudioSource = null;
       console.error('[AudioStreamProcessor] Failed to start listening:', error);
       this.emit('error', error as Error);
       throw error;
@@ -126,8 +174,14 @@ export class AudioStreamProcessor extends EventEmitter {
     }
 
     try {
+      // Stop system audio capture if active
+      if (this.state.currentAudioSource?.type === 'system') {
+        await this.systemAudioCapture.stopCapture();
+      }
+
       this.state.isListening = false;
       this.state.isProcessing = false;
+      this.state.currentAudioSource = null;
       
       // Clear any pending audio data
       this.currentAudioData = [];
@@ -766,11 +820,146 @@ export class AudioStreamProcessor extends EventEmitter {
   }
 
   /**
+   * Get available audio sources
+   */
+  public async getAvailableAudioSources(): Promise<AudioSource[]> {
+    try {
+      return await this.systemAudioCapture.getAvailableSources();
+    } catch (error) {
+      console.error('[AudioStreamProcessor] Error getting audio sources:', error);
+      // Return fallback microphone source
+      return [{
+        id: 'microphone',
+        name: 'Microphone',
+        type: 'microphone',
+        available: true
+      }];
+    }
+  }
+
+  /**
+   * Switch to a different audio source
+   */
+  public async switchAudioSource(sourceId: string): Promise<void> {
+    console.log('[AudioStreamProcessor] Switching to audio source:', sourceId);
+    
+    const wasListening = this.state.isListening;
+    const previousSource = this.state.currentAudioSource;
+    
+    try {
+      // Stop current listening if active
+      if (wasListening) {
+        await this.stopListening();
+      }
+      
+      // Start with new source if we were previously listening
+      if (wasListening) {
+        try {
+          await this.startListening(sourceId);
+        } catch (switchError) {
+          console.warn('[AudioStreamProcessor] Failed to switch to new source, attempting fallback:', switchError);
+          
+          // Try to restore previous source
+          if (previousSource && previousSource.id !== sourceId) {
+            try {
+              console.log('[AudioStreamProcessor] Attempting to restore previous source:', previousSource.name);
+              await this.startListening(previousSource.id);
+              this.emit('error', new Error(`Failed to switch to ${sourceId}, restored ${previousSource.name}: ${(switchError as Error).message}`));
+            } catch (restoreError) {
+              console.error('[AudioStreamProcessor] Failed to restore previous source:', restoreError);
+              // Final fallback to microphone
+              try {
+                await this.startListening('microphone');
+                this.emit('error', new Error(`Audio source switch failed, using microphone fallback: ${(switchError as Error).message}`));
+              } catch (micError) {
+                console.error('[AudioStreamProcessor] All audio sources failed:', micError);
+                throw new Error(`All audio sources failed: ${(micError as Error).message}`);
+              }
+            }
+          } else {
+            throw switchError;
+          }
+        }
+      } else {
+        // Just update the current source without starting capture
+        const sources = await this.getAvailableAudioSources();
+        const targetSource = sources.find(s => s.id === sourceId);
+        
+        if (targetSource && targetSource.available) {
+          this.state.currentAudioSource = targetSource;
+          this.emit('state-changed', { ...this.state });
+        } else {
+          throw new Error(`Audio source not available: ${sourceId}`);
+        }
+      }
+      
+      console.log('[AudioStreamProcessor] Successfully switched to:', sourceId);
+    } catch (error) {
+      console.error('[AudioStreamProcessor] Failed to switch audio source:', error);
+      this.emit('error', error as Error);
+      throw error;
+    }
+  }
+
+  /**
+   * Request permissions for audio capture
+   */
+  public async requestAudioPermissions(): Promise<{ granted: boolean; error?: string }> {
+    try {
+      return await this.systemAudioCapture.requestPermissions();
+    } catch (error) {
+      console.error('[AudioStreamProcessor] Permission request failed:', error);
+      return { 
+        granted: false, 
+        error: `Permission request failed: ${(error as Error).message}` 
+      };
+    }
+  }
+
+  /**
+   * Setup event listeners for SystemAudioCapture
+   */
+  private setupSystemAudioEvents(): void {
+    this.systemAudioCapture.on('audio-data', (audioData: Buffer) => {
+      // Forward system audio data to existing processing pipeline
+      if (this.state.isListening && this.state.currentAudioSource?.type === 'system') {
+        this.processAudioChunk(audioData).catch(error => {
+          console.error('[AudioStreamProcessor] Error processing system audio chunk:', error);
+        });
+      }
+    });
+
+    this.systemAudioCapture.on('source-changed', (source: AudioSource) => {
+      this.state.currentAudioSource = source;
+      this.emit('state-changed', { ...this.state });
+      console.log('[AudioStreamProcessor] Audio source changed to:', source.name);
+    });
+
+    this.systemAudioCapture.on('error', (error: Error) => {
+      console.error('[AudioStreamProcessor] System audio capture error:', error);
+      this.emit('error', error);
+    });
+
+    this.systemAudioCapture.on('state-changed', (captureState) => {
+      // Update our state based on system audio capture state
+      if (!captureState.isCapturing && this.state.currentAudioSource?.type === 'system') {
+        this.state.currentAudioSource = null;
+        this.emit('state-changed', { ...this.state });
+      }
+    });
+  }
+
+  /**
    * Cleanup resources
    */
   public destroy(): void {
     this.removeAllListeners();
     this.currentAudioData = [];
     this.state.questionBuffer = [];
+    
+    // Cleanup system audio capture
+    if (this.systemAudioCapture) {
+      this.systemAudioCapture.destroy();
+    }
   }
 }

@@ -55,7 +55,7 @@
       "gatekeeperAssess": false,
       "entitlements": "assets/entitlements.mac.plist",
       "entitlementsInherit": "assets/entitlements.mac.plist",
-      "notarize": true
+      "notarize": false
     },
     "win": {
       "target": [

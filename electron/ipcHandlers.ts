@@ -442,9 +442,9 @@ export function initializeIpcHandlers(appState: AppState): void {
   })
 
   // Audio Stream Processing handlers
-  ipcMain.handle("audio-stream-start", async () => {
+  ipcMain.handle("audio-stream-start", async (event, audioSourceId?: string) => {
     try {
-      await appState.audioStreamProcessor.startListening();
+      await appState.audioStreamProcessor.startListening(audioSourceId);
       return { success: true };
     } catch (error: any) {
       console.error("Error starting audio stream:", error);
@@ -547,6 +547,49 @@ export function initializeIpcHandlers(appState: AppState): void {
     } catch (error: any) {
       console.error("Error answering question:", error);
       throw error;
+    }
+  });
+
+  // System Audio Capture handlers
+  ipcMain.handle("audio-get-sources", async () => {
+    try {
+      const sources = await appState.audioStreamProcessor.getAvailableAudioSources();
+      return { success: true, sources };
+    } catch (error: any) {
+      console.error("Error getting audio sources:", error);
+      return { success: false, error: error.message, sources: [] };
+    }
+  });
+
+  ipcMain.handle("audio-switch-source", async (event, sourceId: string) => {
+    try {
+      await appState.audioStreamProcessor.switchAudioSource(sourceId);
+      return { success: true };
+    } catch (error: any) {
+      console.error("Error switching audio source:", error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle("audio-request-permissions", async () => {
+    try {
+      const result = await appState.audioStreamProcessor.requestAudioPermissions();
+      return result;
+    } catch (error: any) {
+      console.error("Error requesting audio permissions:", error);
+      return { granted: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle("audio-check-system-support", async () => {
+    try {
+      // Import SystemAudioCapture to access static method
+      const { SystemAudioCapture } = await import("./SystemAudioCapture");
+      const isSupported = await SystemAudioCapture.isSystemAudioSupported();
+      return { supported: isSupported };
+    } catch (error: any) {
+      console.error("Error checking system audio support:", error);
+      return { supported: false };
     }
   });
 }

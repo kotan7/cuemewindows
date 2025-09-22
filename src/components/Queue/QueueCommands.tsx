@@ -12,7 +12,10 @@ import {
   FileText,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogClose } from "../ui/dialog";
-import { DetectedQuestion, AudioStreamState } from "../../types/audio-stream";
+import { DetectedQuestion, AudioStreamState, AudioSource } from "../../types/audio-stream";
+import { AudioSourceSelector } from "../AudioSourceSelector";
+import { AudioLevelIndicator } from "../AudioLevelIndicator";
+import { AudioTroubleshootingHelp } from "../AudioTroubleshootingHelp";
 
 interface QnACollection {
   id: string;
@@ -85,6 +88,15 @@ const QueueCommands = forwardRef<QueueCommandsRef, QueueCommandsProps>((
   const [pollingInterval, setPollingInterval] = useState<number | null>(null);
   const frontendListeningRef = useRef(false); // Local listening state to avoid React delays - using ref to prevent stale closure
   const audioChunks = useRef<Blob[]>([]);
+  
+  // Audio source management
+  const [currentAudioSource, setCurrentAudioSource] = useState<AudioSource | null>(null);
+  const [showAudioSourceSelector, setShowAudioSourceSelector] = useState(false);
+  
+  // Audio feedback and status
+  const [audioLevel, setAudioLevel] = useState(0);
+  const [audioError, setAudioError] = useState<string | null>(null);
+  const [showTroubleshooting, setShowTroubleshooting] = useState(false);
 
   // Remove all chat-related state, handlers, and the Dialog overlay from this file.
 
@@ -228,6 +240,26 @@ const QueueCommands = forwardRef<QueueCommandsRef, QueueCommandsProps>((
     }
   }, [isDropdownOpen, collections, contentLoading, isAuthenticated]);
 
+  // Initialize default audio source
+  useEffect(() => {
+    if (isAuthenticated && !currentAudioSource) {
+      // Set default to microphone
+      setCurrentAudioSource({
+        id: 'microphone',
+        name: 'Microphone',
+        type: 'microphone',
+        available: true
+      });
+    }
+  }, [isAuthenticated, currentAudioSource]);
+
+  // Clear audio level when not listening
+  useEffect(() => {
+    if (!isListening) {
+      setAudioLevel(0);
+    }
+  }, [isListening]);
+
   // Audio Stream event listeners setup
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -241,13 +273,29 @@ const QueueCommands = forwardRef<QueueCommandsRef, QueueCommandsProps>((
       window.electronAPI.onAudioStreamStateChanged((state: AudioStreamState) => {
         console.log('[QueueCommands] Audio stream state changed:', state);
         setAudioStreamState(state);
+        
+        // Update current audio source from state
+        if (state.currentAudioSource) {
+          setCurrentAudioSource(state.currentAudioSource);
+        }
+        
         onAudioStreamStateChange?.(state);
       }),
       
       window.electronAPI.onAudioStreamError((error: string) => {
         console.error('[QueueCommands] Audio stream error:', error);
-        setIsListening(false);
-        stopAudioCapture();
+        setAudioError(error);
+        
+        // Check if this is a fallback scenario (error message contains "fallback" or "using microphone")
+        const isAutoFallback = error.toLowerCase().includes('fallback') || 
+                              error.toLowerCase().includes('using microphone') ||
+                              error.toLowerCase().includes('restored');
+        
+        if (!isAutoFallback) {
+          // Only stop listening for actual failures, not fallbacks
+          setIsListening(false);
+          stopAudioCapture();
+        }
       }),
     ];
 
@@ -298,6 +346,15 @@ const QueueCommands = forwardRef<QueueCommandsRef, QueueCommandsProps>((
   const startAudioCapture = async (): Promise<void> => {
     try {
       console.log('[QueueCommands] Starting audio capture...');
+      
+      // If using system audio, the backend handles capture - no frontend setup needed
+      if (currentAudioSource?.type === 'system') {
+        console.log('[QueueCommands] Using system audio - backend will handle capture');
+        return;
+      }
+      
+      // For microphone input, set up frontend capture
+      console.log('[QueueCommands] Setting up microphone capture...');
       
       // Check microphone permissions first
       try {
@@ -376,6 +433,13 @@ const QueueCommands = forwardRef<QueueCommandsRef, QueueCommandsProps>((
               return;
             }
             
+            // Calculate audio level for visualization
+            if (inputData instanceof Float32Array) {
+              const rms = Math.sqrt(inputData.reduce((sum, sample) => sum + sample * sample, 0) / inputData.length);
+              const level = Math.min(1, rms * 10); // Scale and clamp to 0-1
+              setAudioLevel(level);
+            }
+
             // Send the complete audio chunk to the backend for transcription
             try {
               console.log('[QueueCommands] Sending audio chunk to main process for transcription...', {
@@ -450,6 +514,11 @@ const QueueCommands = forwardRef<QueueCommandsRef, QueueCommandsProps>((
           const inputBuffer = event.inputBuffer;
           const inputData = inputBuffer.getChannelData(0);
           
+          // Calculate audio level for visualization
+          const rms = Math.sqrt(inputData.reduce((sum, sample) => sum + sample * sample, 0) / inputData.length);
+          const level = Math.min(1, rms * 10); // Scale and clamp to 0-1
+          setAudioLevel(level);
+
           // Check for actual audio data
           const hasAudio = inputData.some(sample => Math.abs(sample) > 0.001);
           console.log('[QueueCommands] Audio chunk - samples:', inputData.length, 'hasAudio:', hasAudio);
@@ -547,6 +616,9 @@ const QueueCommands = forwardRef<QueueCommandsRef, QueueCommandsProps>((
       return;
     }
 
+    // Clear previous errors
+    setAudioError(null);
+
     try {
       if (isListening) {
         // Stop listening
@@ -575,21 +647,51 @@ const QueueCommands = forwardRef<QueueCommandsRef, QueueCommandsProps>((
           await startAudioCapture();
           console.log('[QueueCommands] Audio capture initialized');
           
-          // Step 2: Start audio stream processor AFTER capture is ready
-          const result = await window.electronAPI.audioStreamStart();
-          if (!result.success) {
-            console.error('[QueueCommands] Failed to start audio stream:', result.error);
-            setIsListening(false);
-            stopAudioCapture();
-            return;
+          // Step 2: Start audio stream processor AFTER capture is ready with retry logic
+          const sourceId = currentAudioSource?.id || 'microphone';
+          let retryCount = 0;
+          const maxRetries = 2;
+          
+          while (retryCount <= maxRetries) {
+            try {
+              const result = await window.electronAPI.audioStreamStart(sourceId);
+              if (!result.success) {
+                throw new Error(result.error || 'Audio stream start failed');
+              }
+              
+              console.log('[QueueCommands] Audio listening started successfully');
+              window.electronAPI.invoke('debug-log', '[QueueCommands] Audio listening started successfully');
+              break; // Success, exit retry loop
+              
+            } catch (streamError) {
+              retryCount++;
+              console.warn(`[QueueCommands] Audio stream start attempt ${retryCount} failed:`, streamError);
+              
+              if (retryCount > maxRetries) {
+                throw streamError; // Final failure
+              }
+              
+              // Try fallback to microphone on retry
+              if (retryCount === 1 && sourceId !== 'microphone') {
+                console.log('[QueueCommands] Retrying with microphone fallback...');
+                setCurrentAudioSource({
+                  id: 'microphone',
+                  name: 'Microphone (Fallback)',
+                  type: 'microphone',
+                  available: true
+                });
+              }
+              
+              // Wait before retry
+              await new Promise(resolve => setTimeout(resolve, 1000));
+            }
           }
           
-          console.log('[QueueCommands] Audio listening started successfully');
-          window.electronAPI.invoke('debug-log', '[QueueCommands] Audio listening started successfully');
-          
         } catch (error) {
+          const errorMsg = error instanceof Error ? error.message : 'Failed to start audio listening';
           console.error('[QueueCommands] Failed to start audio listening:', error);
           window.electronAPI.invoke('debug-log', '[QueueCommands] Failed to start audio listening: ' + error);
+          setAudioError(errorMsg);
           setIsListening(false);
           stopAudioCapture();
           throw error;
@@ -597,10 +699,40 @@ const QueueCommands = forwardRef<QueueCommandsRef, QueueCommandsProps>((
       }
       
     } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Error toggling listen state';
       console.error('[QueueCommands] Error toggling listen state:', error);
       window.electronAPI.invoke('debug-log', '[QueueCommands] Error toggling listen state: ' + error);
+      setAudioError(errorMsg);
       setIsListening(false);
       stopAudioCapture();
+    }
+  };
+
+  /**
+   * Handle audio source change
+   */
+  const handleAudioSourceChange = async (sourceId: string): Promise<void> => {
+    try {
+      console.log('[QueueCommands] Switching audio source to:', sourceId);
+      
+      // Clear previous errors
+      setAudioError(null);
+      
+      // Switch the audio source in the backend
+      const result = await window.electronAPI.audioSwitchSource(sourceId);
+      if (!result.success) {
+        const errorMsg = result.error || 'Failed to switch audio source';
+        console.error('[QueueCommands] Failed to switch audio source:', result.error);
+        setAudioError(errorMsg);
+        return;
+      }
+      
+      console.log('[QueueCommands] Audio source switched successfully');
+      
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Error switching audio source';
+      console.error('[QueueCommands] Error switching audio source:', error);
+      setAudioError(errorMsg);
     }
   };
 
@@ -687,6 +819,33 @@ const QueueCommands = forwardRef<QueueCommandsRef, QueueCommandsProps>((
                 </>
               )}
             </button>
+            
+            {/* Audio Source Selector */}
+            <AudioSourceSelector
+              currentSource={currentAudioSource}
+              onSourceChange={handleAudioSourceChange}
+              disabled={isListening}
+              className="ml-1"
+            />
+            
+            {/* Audio Level Indicator */}
+            <AudioLevelIndicator
+              isListening={isListening}
+              currentSource={currentAudioSource}
+              audioLevel={audioLevel}
+              error={audioError}
+              className="ml-2"
+            />
+            
+            {/* Troubleshooting Help */}
+            {(audioError || !isListening) && (
+              <AudioTroubleshootingHelp
+                error={audioError}
+                currentSource={currentAudioSource}
+                onClose={() => setShowTroubleshooting(false)}
+                className="ml-1"
+              />
+            )}
           </div>
         )}
 

@@ -1,5 +1,13 @@
 import { contextBridge, ipcRenderer } from "electron"
 
+// Audio source type
+interface AudioSource {
+  id: string;
+  name: string;
+  type: 'microphone' | 'system';
+  available: boolean;
+}
+
 // Types for the exposed Electron API
 interface ElectronAPI {
   updateContentDimensions: (dimensions: {
@@ -37,13 +45,19 @@ interface ElectronAPI {
   invoke: (channel: string, ...args: any[]) => Promise<any>
   
   // Audio Stream methods
-  audioStreamStart: () => Promise<{ success: boolean; error?: string }>
+  audioStreamStart: (audioSourceId?: string) => Promise<{ success: boolean; error?: string }>
   audioStreamStop: () => Promise<{ success: boolean; error?: string }>
   audioStreamProcessChunk: (audioData: Float32Array) => Promise<{ success: boolean; error?: string }>
   audioStreamGetState: () => Promise<{ isListening: boolean; error?: string }>
   audioStreamGetQuestions: () => Promise<Array<{ text: string; timestamp: number }>>
   audioStreamClearQuestions: () => Promise<{ success: boolean; error?: string }>
   audioStreamAnswerQuestion: (questionText: string, collectionId?: string) => Promise<{ response: string; timestamp: number }>
+  
+  // System Audio methods
+  audioGetSources: () => Promise<{ success: boolean; sources: AudioSource[]; error?: string }>
+  audioSwitchSource: (sourceId: string) => Promise<{ success: boolean; error?: string }>
+  audioRequestPermissions: () => Promise<{ granted: boolean; error?: string }>
+  audioCheckSystemSupport: () => Promise<{ supported: boolean }>
   
   // Audio Stream event listeners
   onAudioQuestionDetected: (callback: (question: { text: string; timestamp: number }) => void) => () => void
@@ -198,13 +212,19 @@ contextBridge.exposeInMainWorld("electronAPI", {
   invoke: (channel: string, ...args: any[]) => ipcRenderer.invoke(channel, ...args),
   
   // Audio Stream methods
-  audioStreamStart: () => ipcRenderer.invoke("audio-stream-start"),
+  audioStreamStart: (audioSourceId?: string) => ipcRenderer.invoke("audio-stream-start", audioSourceId),
   audioStreamStop: () => ipcRenderer.invoke("audio-stream-stop"),
   audioStreamProcessChunk: (audioData: Float32Array) => ipcRenderer.invoke("audio-stream-process-chunk", audioData),
   audioStreamGetState: () => ipcRenderer.invoke("audio-stream-get-state") as Promise<{ isListening: boolean; error?: string }>,
   audioStreamGetQuestions: () => ipcRenderer.invoke("audio-stream-get-questions") as Promise<Array<{ text: string; timestamp: number }>>,
   audioStreamClearQuestions: () => ipcRenderer.invoke("audio-stream-clear-questions"),
   audioStreamAnswerQuestion: (questionText: string, collectionId?: string) => ipcRenderer.invoke("audio-stream-answer-question", questionText, collectionId),
+  
+  // System Audio methods
+  audioGetSources: () => ipcRenderer.invoke("audio-get-sources") as Promise<{ success: boolean; sources: AudioSource[]; error?: string }>,
+  audioSwitchSource: (sourceId: string) => ipcRenderer.invoke("audio-switch-source", sourceId) as Promise<{ success: boolean; error?: string }>,
+  audioRequestPermissions: () => ipcRenderer.invoke("audio-request-permissions") as Promise<{ granted: boolean; error?: string }>,
+  audioCheckSystemSupport: () => ipcRenderer.invoke("audio-check-system-support") as Promise<{ supported: boolean }>,
   
   // Audio Stream event listeners
   onAudioQuestionDetected: (callback: (question: any) => void) => {
