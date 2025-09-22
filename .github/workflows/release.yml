@@ -87,21 +87,24 @@ jobs:
           sudo apt-get install -y libnss3-dev libatk-bridge2.0-dev libdrm2 libxkbcommon-dev libxss1 libasound2-dev libxtst6 libatspi2.0-0 libdrm2 libxdamage1 libxrandr2 libgbm1 libxcomposite1 libxcursor1 libxi6 libgtk-3-0
           echo "Linux dependencies installed successfully"
 
-      # Setup macOS keychain and certificates using local certificate file
+      # Setup macOS keychain and certificates using GitHub secrets
       - name: Setup macOS keychain and certificates
         if: matrix.platform == 'mac'
         run: |
-          echo "Setting up macOS code signing with local certificate..."
+          echo "Setting up macOS code signing with certificate from secrets..."
           
-          # Check if certificate file exists
+          # Create certificate file from base64-encoded secret
+          echo "${{ secrets.CSC_LINK }}" | base64 --decode > certificate.p12
+          
+          # Check if certificate file was created successfully
           if [ ! -f "./certificate.p12" ]; then
-            echo "Error: certificate.p12 not found in repository root"
+            echo "Error: Failed to create certificate.p12 from secrets"
             exit 1
           fi
           
           # Verify it's a valid P12 file
-          if ! file ./certificate.p12 | grep -q "PKCS"; then
-            echo "Error: certificate.p12 doesn't appear to be a valid PKCS#12 certificate."
+          if ! file ./certificate.p12 | grep -q "data"; then
+            echo "Error: certificate.p12 doesn't appear to be a valid certificate file."
             echo "File type: $(file ./certificate.p12)"
             exit 1
           fi
@@ -145,7 +148,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # macOS Code Signing - using local certificate file
+          # macOS Code Signing - using certificate from GitHub secrets
           CSC_LINK: "./certificate.p12"
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
           # macOS Notarization - using environment secrets
