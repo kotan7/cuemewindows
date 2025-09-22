@@ -146,6 +146,7 @@ jobs:
 
       - name: Build and release Electron app
         shell: bash
+        timeout-minutes: 30
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # macOS Code Signing - using certificate from GitHub secrets
@@ -155,21 +156,30 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Enable verbose logging for debugging
+          DEBUG: "electron-builder"
         run: |
           echo "Building and releasing for platform: ${{ matrix.platform }}"
+          
+          # Kill any existing codesign processes that might be hanging
+          if [ "${{ matrix.platform }}" = "mac" ]; then
+            echo "Cleaning up any hanging codesign processes..."
+            pkill -f codesign || true
+            pkill -f notarytool || true
+          fi
           
           # Run the build script
           echo "Running build script..."
           npm run build
           
-          # Run electron-builder with platform-specific arguments
-          echo "Running electron-builder..."
+          # Run electron-builder with platform-specific arguments and verbose logging
+          echo "Running electron-builder with timeout protection..."
           if [ "${{ matrix.platform }}" = "mac" ]; then
-            npx electron-builder --mac --publish always
+            timeout 25m npx electron-builder --mac --publish always --verbose
           elif [ "${{ matrix.platform }}" = "win" ]; then
-            npx electron-builder --win --publish always
+            npx electron-builder --win --publish always --verbose
           elif [ "${{ matrix.platform }}" = "linux" ]; then
-            npx electron-builder --linux --publish always
+            npx electron-builder --linux --publish always --verbose
           fi
           
           echo "Build and release completed for ${{ matrix.platform }}"

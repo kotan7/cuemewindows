@@ -34,6 +34,7 @@
     "compression": "maximum",
     "mac": {
       "category": "public.app-category.productivity",
+      "icon": "public/logo.png",
       "target": [
         {
           "target": "dmg",
