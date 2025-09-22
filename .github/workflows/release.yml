@@ -173,9 +173,9 @@ jobs:
           npm run build
           
           # Run electron-builder with platform-specific arguments and verbose logging
-          echo "Running electron-builder with timeout protection..."
+          echo "Running electron-builder..."
           if [ "${{ matrix.platform }}" = "mac" ]; then
-            timeout 25m npx electron-builder --mac --publish always --verbose
+            npx electron-builder --mac --publish always --verbose
           elif [ "${{ matrix.platform }}" = "win" ]; then
             npx electron-builder --win --publish always --verbose
           elif [ "${{ matrix.platform }}" = "linux" ]; then
