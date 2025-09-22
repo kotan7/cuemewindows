@@ -54,9 +54,7 @@
       "gatekeeperAssess": false,
       "entitlements": "assets/entitlements.mac.plist",
       "entitlementsInherit": "assets/entitlements.mac.plist",
-      "notarize": {
-        "teamId": "4KS6YS23KT"
-      }
+      "notarize": true
     },
     "win": {
       "target": [
