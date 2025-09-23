@@ -1,6 +1,6 @@
 {
   "name": "CueMe",
-  "version": "1.0.26",
+  "version": "1.0.31",
   "main": "./dist-electron/main.js",
   "scripts": {
     "clean": "rimraf dist dist-electron",
