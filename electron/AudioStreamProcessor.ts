@@ -125,18 +125,43 @@ export class AudioStreamProcessor extends EventEmitter {
           this.state.currentAudioSource = captureState.currentSource;
           
         } catch (systemError) {
-          console.warn('[AudioStreamProcessor] System audio capture failed, falling back to microphone:', systemError);
+          console.warn('[AudioStreamProcessor] System audio capture failed, attempting fallback:', systemError);
           
-          // Fallback to microphone
-          this.state.currentAudioSource = {
-            id: 'microphone',
-            name: 'Microphone (Fallback)',
-            type: 'microphone',
-            available: true
-          };
+          // Enhanced fallback strategy
+          let fallbackSucceeded = false;
+          const fallbackAttempts = [
+            {
+              id: 'microphone',
+              name: 'Microphone (Auto-Fallback)',
+              description: 'System audio unavailable, using microphone'
+            }
+          ];
           
-          // Emit a warning but don't fail completely
-          this.emit('error', new Error(`System audio failed, using microphone: ${(systemError as Error).message}`));
+          for (const fallback of fallbackAttempts) {
+            try {
+              console.log(`[AudioStreamProcessor] Attempting fallback: ${fallback.description}`);
+              
+              this.state.currentAudioSource = {
+                id: fallback.id,
+                name: fallback.name,
+                type: 'microphone',
+                available: true
+              };
+              
+              fallbackSucceeded = true;
+              break;
+            } catch (fallbackError) {
+              console.warn(`[AudioStreamProcessor] Fallback ${fallback.id} failed:`, fallbackError);
+            }
+          }
+          
+          if (fallbackSucceeded) {
+            // Emit a user-friendly warning with specific guidance
+            const errorMessage = this.getSystemAudioErrorMessage(systemError as Error);
+            this.emit('error', new Error(errorMessage));
+          } else {
+            throw new Error('All audio capture methods failed. Please check your audio permissions.');
+          }
         }
       } else {
         // Default to microphone (existing behavior)
@@ -917,8 +942,23 @@ export class AudioStreamProcessor extends EventEmitter {
   }
 
   /**
-   * Setup event listeners for SystemAudioCapture
+   * Get user-friendly error message for system audio failures
    */
+  private getSystemAudioErrorMessage(error: Error): string {
+    const errorMsg = error.message.toLowerCase();
+    
+    if (errorMsg.includes('screencapturekit') && errorMsg.includes('permission')) {
+      return 'System audio restored to microphone. For better Zoom compatibility, grant Screen Recording permission in System Preferences → Security & Privacy → Screen Recording, then restart the app.';
+    } else if (errorMsg.includes('permission') || errorMsg.includes('denied')) {
+      return 'System audio restored to microphone. Screen recording permission required for system audio capture.';
+    } else if (errorMsg.includes('macos') || errorMsg.includes('version')) {
+      return 'System audio restored to microphone. macOS 13.0+ required for enhanced system audio capture.';
+    } else if (errorMsg.includes('binary') || errorMsg.includes('not found')) {
+      return 'System audio restored to microphone. Enhanced system audio components not available.';
+    } else {
+      return `System audio restored to microphone. ${error.message}`;
+    }
+  }
   private setupSystemAudioEvents(): void {
     this.systemAudioCapture.on('audio-data', (audioData: Buffer) => {
       // Forward system audio data to existing processing pipeline

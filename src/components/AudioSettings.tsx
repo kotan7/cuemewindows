@@ -101,7 +101,14 @@ export const AudioSettings: React.FC<AudioSettingsProps> = ({
       case "microphone":
         return <Mic className="w-4 h-4" />;
       case "system":
-        return <Monitor className="w-4 h-4" />;
+        // Enhanced icon for ScreenCaptureKit vs Legacy
+        if (source.name.includes("ScreenCaptureKit")) {
+          return <Monitor className="w-4 h-4 text-green-400" />;
+        } else if (source.name.includes("Legacy")) {
+          return <Monitor className="w-4 h-4 text-yellow-400" />;
+        } else {
+          return <Monitor className="w-4 h-4" />;
+        }
       default:
         return <Mic className="w-4 h-4" />;
     }
@@ -111,6 +118,9 @@ export const AudioSettings: React.FC<AudioSettingsProps> = ({
     if (error) return "text-red-400";
     if (!isListening) return "text-white/50";
     if (currentSource?.available === false) return "text-yellow-400";
+    // Enhanced status for ScreenCaptureKit
+    if (currentSource?.name.includes("ScreenCaptureKit"))
+      return "text-green-500";
     return "text-green-400";
   };
 
@@ -118,6 +128,8 @@ export const AudioSettings: React.FC<AudioSettingsProps> = ({
     if (error) return "Error";
     if (!isListening) return "Stopped";
     if (currentSource?.available === false) return "Unavailable";
+    if (currentSource?.name.includes("ScreenCaptureKit")) return "Enhanced";
+    if (currentSource?.name.includes("Legacy")) return "Legacy";
     return "Active";
   };
 
@@ -209,12 +221,37 @@ export const AudioSettings: React.FC<AudioSettingsProps> = ({
                   >
                     {getSourceIcon(source)}
                     <div className="flex-1 min-w-0">
-                      <div className="truncate">{source.name}</div>
-                      {!source.available && (
+                      <div className="flex items-center gap-2">
+                        <span className="truncate">{source.name}</span>
+                        {/* Enhanced badges for system audio types */}
+                        {source.type === "system" &&
+                          source.name.includes("ScreenCaptureKit") && (
+                            <span className="px-1.5 py-0.5 text-xs bg-green-500/20 text-green-400 rounded-full">
+                              Enhanced
+                            </span>
+                          )}
+                        {source.type === "system" &&
+                          source.name.includes("Legacy") && (
+                            <span className="px-1.5 py-0.5 text-xs bg-yellow-500/20 text-yellow-400 rounded-full">
+                              Legacy
+                            </span>
+                          )}
+                      </div>
+                      {!source.available ? (
                         <div className="text-xs text-red-400">
                           Permission required
                         </div>
-                      )}
+                      ) : source.type === "system" &&
+                        source.name.includes("ScreenCaptureKit") ? (
+                        <div className="text-xs text-green-300">
+                          Best for Zoom compatibility
+                        </div>
+                      ) : source.type === "system" &&
+                        source.name.includes("Legacy") ? (
+                        <div className="text-xs text-yellow-300">
+                          Basic system audio capture
+                        </div>
+                      ) : null}
                     </div>
                     {currentSource?.id === source.id && (
                       <CheckCircle className="w-3 h-3 text-green-400 flex-shrink-0" />
@@ -242,6 +279,43 @@ export const AudioSettings: React.FC<AudioSettingsProps> = ({
           </div>
         )}
       </div>
+
+      {/* Enhanced Status Indicator for System Audio */}
+      {isListening && currentSource?.type === "system" && (
+        <div className="p-2 bg-blue-500/10 border border-blue-500/20 rounded">
+          <div className="flex items-center gap-2 mb-1">
+            {currentSource.name.includes("ScreenCaptureKit") ? (
+              <>
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                <span className="text-xs text-green-400 font-medium">
+                  ScreenCaptureKit Active
+                </span>
+              </>
+            ) : currentSource.name.includes("Legacy") ? (
+              <>
+                <div className="w-2 h-2 bg-yellow-500 rounded-full" />
+                <span className="text-xs text-yellow-400 font-medium">
+                  Legacy Mode Active
+                </span>
+              </>
+            ) : (
+              <>
+                <div className="w-2 h-2 bg-blue-500 rounded-full" />
+                <span className="text-xs text-blue-400 font-medium">
+                  System Audio Active
+                </span>
+              </>
+            )}
+          </div>
+          <div className="text-xs text-white/70">
+            {currentSource.name.includes("ScreenCaptureKit")
+              ? "Enhanced system audio capture - perfect for Zoom and other apps"
+              : currentSource.name.includes("Legacy")
+              ? "Basic system audio capture - may require screen recording permission"
+              : "Capturing system audio output"}
+          </div>
+        </div>
+      )}
 
       {/* Error display */}
       {error && (
@@ -293,21 +367,39 @@ export const AudioSettings: React.FC<AudioSettingsProps> = ({
                 <Monitor className="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" />
                 <div>
                   <div className="font-medium text-white/90 mb-1 text-xs">
-                    System Audio Issues
+                    ScreenCaptureKit System Audio (Enhanced)
                   </div>
                   <ul className="text-xs text-white/70 space-y-1 list-disc list-inside">
+                    <li>Best compatibility with Zoom, Teams, and other apps</li>
+                    <li>Requires macOS 13.0+ for full functionality</li>
+                    <li>
+                      Grant Screen Recording permission in System Preferences
+                    </li>
+                    <li>
+                      Perfect for capturing meeting audio when wearing
+                      headphones
+                    </li>
+                    <li>Restart the app after granting new permissions</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-start gap-2">
+                <Monitor className="w-4 h-4 text-yellow-400 mt-0.5 flex-shrink-0" />
+                <div>
+                  <div className="font-medium text-white/90 mb-1 text-xs">
+                    Legacy System Audio (Fallback)
+                  </div>
+                  <ul className="text-xs text-white/70 space-y-1 list-disc list-inside">
+                    <li>Uses traditional desktop capture method</li>
+                    <li>May have limited compatibility with some apps</li>
                     <li>
                       Grant screen recording permission in System Preferences
                     </li>
-                    <li>
-                      macOS: System Preferences → Security & Privacy → Screen
-                      Recording
-                    </li>
-                    <li>
-                      Windows: Allow desktop audio capture in app permissions
-                    </li>
-                    <li>Restart the app after granting permissions</li>
-                    <li>Check if audio is playing on your system</li>
+                    <li>Automatically enabled on older macOS versions</li>
+                    <li>Try upgrading to macOS 13.0+ for better performance</li>
                   </ul>
                 </div>
               </div>
