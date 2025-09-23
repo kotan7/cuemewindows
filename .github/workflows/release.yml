@@ -87,59 +87,16 @@ jobs:
           sudo apt-get install -y libnss3-dev libatk-bridge2.0-dev libdrm2 libxkbcommon-dev libxss1 libasound2-dev libxtst6 libatspi2.0-0 libdrm2 libxdamage1 libxrandr2 libgbm1 libxcomposite1 libxcursor1 libxi6 libgtk-3-0
           echo "Linux dependencies installed successfully"
 
-      # Setup macOS keychain and certificates using local certificate file
-      - name: Setup macOS keychain and certificates
+      # macOS code signing will be handled automatically by electron-builder using GitHub secrets
+      - name: Verify macOS code signing setup
         if: matrix.platform == 'mac'
         run: |
-          echo "Setting up macOS code signing with local certificate..."
-          
-          # Check if certificate file exists
-          if [ ! -f "./certificate.p12" ]; then
-            echo "Error: certificate.p12 not found in repository root"
-            exit 1
-          fi
-          
-          # Verify it's a valid P12 file
-          if ! file ./certificate.p12 | grep -q "PKCS"; then
-            echo "Error: certificate.p12 doesn't appear to be a valid PKCS#12 certificate."
-            echo "File type: $(file ./certificate.p12)"
-            exit 1
-          fi
-          
-          echo "Creating and configuring keychain..."
-          # Create a temporary keychain
-          KEYCHAIN_PATH="$HOME/build.keychain"
-          KEYCHAIN_PASSWORD="temp_keychain_password"
-          
-          # Create keychain
-          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          
-          # Set keychain settings (timeout: 21600 seconds = 6 hours)
-          security set-keychain-settings -t 21600 -u "$KEYCHAIN_PATH"
-          
-          # Unlock keychain
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          
-          # Add keychain to search list
-          security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | sed s/\"//g)
-          
-          echo "Importing certificate..."
-          # Import certificate with the password from package-mac-signed.sh
-          if ! security import ./certificate.p12 -k "$KEYCHAIN_PATH" -P "Rmwtclag\$1964" -T /usr/bin/codesign -T /usr/bin/security; then
-            echo "Error: Failed to import certificate. Please check:"
-            echo "1. Certificate file ./certificate.p12 is valid"
-            echo "2. Certificate password is correct"
-            echo "3. Certificate is not expired"
-            exit 1
-          fi
-          
-          # Set partition list to allow codesign to access the certificate
-          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          
-          echo "Verifying signing identities..."
-          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
-          
-          echo "macOS code signing setup completed successfully"
+          echo "Using GitHub secrets for macOS code signing..."
+          echo "CSC_LINK is set: ${{ secrets.CSC_LINK != '' }}"
+          echo "CSC_KEY_PASSWORD is set: ${{ secrets.CSC_KEY_PASSWORD != '' }}"
+          echo "APPLE_ID is set: ${{ secrets.APPLE_ID != '' }}"
+          echo "APPLE_APP_SPECIFIC_PASSWORD is set: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD != '' }}"
+          echo "APPLE_TEAM_ID is set: ${{ secrets.APPLE_TEAM_ID != '' }}"
 
       - name: Build and release Electron app
         shell: bash
