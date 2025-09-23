@@ -52,13 +52,43 @@ declare global {
       ) => Promise<{ text: string; timestamp: number }>;
 
       // Audio Stream methods
-      audioStreamStart: () => Promise<{ success: boolean; error?: string }>;
+      audioStreamStart: (
+        sourceId?: string
+      ) => Promise<{ success: boolean; error?: string }>;
       audioStreamStop: () => Promise<{ success: boolean; error?: string }>;
-      audioStreamProcessChunk: (audioData: Float32Array) => Promise<{ success: boolean; error?: string }>;
-      audioStreamGetState: () => Promise<{ isListening: boolean; error?: string }>;
-      audioStreamGetQuestions: () => Promise<Array<{ text: string; timestamp: number }>>;
-      audioStreamClearQuestions: () => Promise<{ success: boolean; error?: string }>;
-      audioStreamAnswerQuestion: (questionText: string, collectionId?: string) => Promise<{ response: string; timestamp: number }>;
+      audioStreamProcessChunk: (
+        audioData: Float32Array
+      ) => Promise<{ success: boolean; error?: string }>;
+      audioStreamGetState: () => Promise<{
+        isListening: boolean;
+        error?: string;
+      }>;
+      audioStreamGetQuestions: () => Promise<
+        Array<{ text: string; timestamp: number }>
+      >;
+      audioStreamClearQuestions: () => Promise<{
+        success: boolean;
+        error?: string;
+      }>;
+      audioStreamAnswerQuestion: (
+        questionText: string,
+        collectionId?: string
+      ) => Promise<{ response: string; timestamp: number }>;
+
+      // System Audio methods
+      audioGetSources: () => Promise<{
+        success: boolean;
+        sources: any[];
+        error?: string;
+      }>;
+      audioSwitchSource: (
+        sourceId: string
+      ) => Promise<{ success: boolean; error?: string }>;
+      audioRequestPermissions: () => Promise<{
+        granted: boolean;
+        error?: string;
+      }>;
+      audioCheckSystemSupport: () => Promise<{ supported: boolean }>;
 
       moveWindowLeft: () => Promise<void>;
       moveWindowRight: () => Promise<void>;
@@ -69,18 +99,40 @@ declare global {
       onChatToggle: (callback: () => void) => () => void;
 
       // Audio Stream event listeners
-      onAudioQuestionDetected: (callback: (question: any) => void) => () => void;
-      onAudioBatchProcessed: (callback: (questions: any[]) => void) => () => void;
+      onAudioQuestionDetected: (
+        callback: (question: any) => void
+      ) => () => void;
+      onAudioBatchProcessed: (
+        callback: (questions: any[]) => void
+      ) => () => void;
       onAudioStreamStateChanged: (callback: (state: any) => void) => () => void;
       onAudioStreamError: (callback: (error: string) => void) => () => void;
 
       // Auth methods
-      authSignIn: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-      authSignUp: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+      authSignIn: (
+        email: string,
+        password: string
+      ) => Promise<{ success: boolean; error?: string }>;
+      authSignUp: (
+        email: string,
+        password: string
+      ) => Promise<{ success: boolean; error?: string }>;
       authSignOut: () => Promise<{ success: boolean; error?: string }>;
-      authGetState: () => Promise<{ user: any | null; session: any | null; isLoading: boolean }>;
-      authResetPassword: (email: string) => Promise<{ success: boolean; error?: string }>;
-      onAuthStateChange: (callback: (state: { user: any | null; session: any | null; isLoading: boolean }) => void) => () => void;
+      authGetState: () => Promise<{
+        user: any | null;
+        session: any | null;
+        isLoading: boolean;
+      }>;
+      authResetPassword: (
+        email: string
+      ) => Promise<{ success: boolean; error?: string }>;
+      onAuthStateChange: (
+        callback: (state: {
+          user: any | null;
+          session: any | null;
+          isLoading: boolean;
+        }) => void
+      ) => () => void;
     };
   }
 }

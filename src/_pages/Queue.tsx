@@ -1,7 +1,21 @@
 import React, { useState, useEffect, useRef } from "react";
 import { ModeSelect, ModeToggle } from "../components/ui/mode-select";
 import { useQuery } from "react-query";
-import { MessageCircle, Send, LogOut, User, Settings, Target, FileText, Briefcase, Scale, BookOpen, Phone, Wrench, MessageSquare } from "lucide-react";
+import {
+  MessageCircle,
+  Send,
+  LogOut,
+  User,
+  Settings,
+  Target,
+  FileText,
+  Briefcase,
+  Scale,
+  BookOpen,
+  Phone,
+  Wrench,
+  MessageSquare,
+} from "lucide-react";
 import ScreenshotQueue from "../components/Queue/ScreenshotQueue";
 import {
   Toast,
@@ -11,11 +25,14 @@ import {
   ToastVariant,
   ToastMessage,
 } from "../components/ui/toast";
-import QueueCommands, { QueueCommandsRef } from "../components/Queue/QueueCommands";
+import QueueCommands, {
+  QueueCommandsRef,
+} from "../components/Queue/QueueCommands";
 import QuestionSidePanel from "../components/AudioListener/QuestionSidePanel";
 import { DetectedQuestion, AudioStreamState } from "../types/audio-stream";
 import { useVerticalResize } from "../hooks/useVerticalResize";
 import { ModeOption } from "../types/modes";
+import { AudioSettings } from "../components/AudioSettings";
 
 // Compact Mode Selector for Profile Dropdown
 const ProfileModeSelector: React.FC<{
@@ -31,15 +48,21 @@ const ProfileModeSelector: React.FC<{
 
   const loadAvailableModes = async () => {
     try {
-      const modes = await window.electronAPI.invoke('get-available-modes');
+      const modes = await window.electronAPI.invoke("get-available-modes");
       // Filter to show only the most common modes
-      const compactModes = ['interview', 'meeting', 'sales', 'telesales', 'support'];
+      const compactModes = [
+        "interview",
+        "meeting",
+        "sales",
+        "telesales",
+        "support",
+      ];
       const filteredModes = modes.filter((mode: ModeOption) =>
         compactModes.includes(mode.key)
       );
       setAvailableModes(filteredModes);
     } catch (error) {
-      console.error('Failed to load available modes:', error);
+      console.error("Failed to load available modes:", error);
     }
   };
 
@@ -51,12 +74,14 @@ const ProfileModeSelector: React.FC<{
       debate: Scale,
       class: BookOpen,
       telesales: Phone,
-      support: Wrench
+      support: Wrench,
     };
     return iconMap[modeKey] || MessageSquare;
   };
 
-  const currentModeData = availableModes.find(mode => mode.key === currentMode);
+  const currentModeData = availableModes.find(
+    (mode) => mode.key === currentMode
+  );
   const CurrentIcon = getModeIcon(currentMode);
 
   return (
@@ -69,16 +94,27 @@ const ProfileModeSelector: React.FC<{
         <div className="flex items-center gap-2">
           <CurrentIcon className="w-3 h-3" />
           <span>
-            {currentModeData?.displayName?.replace('モード', '').replace('（候補者）', '').replace('（提案）', '').replace('（高応答）', '') || currentMode}
+            {currentModeData?.displayName
+              ?.replace("モード", "")
+              .replace("（候補者）", "")
+              .replace("（提案）", "")
+              .replace("（高応答）", "") || currentMode}
           </span>
         </div>
         <svg
-          className={`w-3 h-3 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+          className={`w-3 h-3 transition-transform ${
+            isOpen ? "rotate-180" : ""
+          }`}
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
         >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M19 9l-7 7-7-7"
+          />
         </svg>
       </button>
 
@@ -102,13 +138,20 @@ const ProfileModeSelector: React.FC<{
                     onModeChange(mode.key);
                     setIsOpen(false);
                   }}
-                  className={`w-full px-3 py-2 text-left text-xs hover:bg-white/10 focus:outline-none focus:bg-white/10 transition-colors flex items-center gap-2 ${mode.key === currentMode ? 'text-white bg-white/10' : 'text-white/80'
-                    }`}
+                  className={`w-full px-3 py-2 text-left text-xs hover:bg-white/10 focus:outline-none focus:bg-white/10 transition-colors flex items-center gap-2 ${
+                    mode.key === currentMode
+                      ? "text-white bg-white/10"
+                      : "text-white/80"
+                  }`}
                 >
                   <Icon className="w-3 h-3" />
                   <div>
                     <div className="font-medium">
-                      {mode.displayName.replace('モード', '').replace('（候補者）', '').replace('（提案）', '').replace('（高応答）', '')}
+                      {mode.displayName
+                        .replace("モード", "")
+                        .replace("（候補者）", "")
+                        .replace("（提案）", "")
+                        .replace("（高応答）", "")}
                     </div>
                   </div>
                 </button>
@@ -165,12 +208,20 @@ const Queue: React.FC<QueueProps> = ({ setView, onSignOut }) => {
   });
 
   // Mode state for new mode functionality
-  const [currentMode, setCurrentMode] = useState('interview'); // デフォルトは面接モード
+  const [currentMode, setCurrentMode] = useState("interview"); // デフォルトは面接モード
 
   // Audio stream state
-  const [detectedQuestions, setDetectedQuestions] = useState<DetectedQuestion[]>([]);
-  const [audioStreamState, setAudioStreamState] = useState<AudioStreamState | null>(null);
-  
+  const [detectedQuestions, setDetectedQuestions] = useState<
+    DetectedQuestion[]
+  >([]);
+  const [audioStreamState, setAudioStreamState] =
+    useState<AudioStreamState | null>(null);
+
+  // Audio settings state (moved from QueueCommands)
+  const [currentAudioSource, setCurrentAudioSource] = useState<any>(null);
+  const [isListening, setIsListening] = useState(false);
+  const [audioError, setAudioError] = useState<string | null>(null);
+
   // Ref to access QueueCommands methods
   const queueCommandsRef = useRef<QueueCommandsRef>(null);
 
@@ -178,12 +229,12 @@ const Queue: React.FC<QueueProps> = ({ setView, onSignOut }) => {
   const chatResize = useVerticalResize({
     minHeight: 200,
     maxHeight: 600,
-    initialHeight: 200
+    initialHeight: 200,
   });
   const questionResize = useVerticalResize({
     minHeight: 200,
     maxHeight: 600,
-    initialHeight: 320
+    initialHeight: 320,
   });
 
   const barRef = useRef<HTMLDivElement>(null);
@@ -230,7 +281,11 @@ const Queue: React.FC<QueueProps> = ({ setView, onSignOut }) => {
   };
 
   const handleSubscriptionUpgrade = () => {
-    window.electronAPI.invoke("open-external-url", "https://www.cueme.ink/dashboard/subscription")
+    window.electronAPI
+      .invoke(
+        "open-external-url",
+        "https://www.cueme.ink/dashboard/subscription"
+      )
       .catch(console.error);
     setShowUsageLimitToast(false);
   };
@@ -276,7 +331,8 @@ const Queue: React.FC<QueueProps> = ({ setView, onSignOut }) => {
           currentMode,
           responseMode.collectionId
         );
-        response = result.text || result.modeResponse?.answer || result.response;
+        response =
+          result.text || result.modeResponse?.answer || result.response;
       } else {
         // Use mode-enabled plain chat
         const result = await window.electronAPI.invoke(
@@ -284,15 +340,18 @@ const Queue: React.FC<QueueProps> = ({ setView, onSignOut }) => {
           currentInput,
           currentMode
         );
-        response = result.text || result.modeResponse?.answer || result.response;
+        response =
+          result.text || result.modeResponse?.answer || result.response;
       }
 
       setChatMessages((msgs) => [...msgs, { role: "gemini", text: response }]);
     } catch (err: any) {
       // Check if this is a usage limit error
-      if (err.message && err.message.includes('Usage limit exceeded') ||
-        err.message && err.message.includes('Monthly limit') ||
-        err.message && err.message.includes('Insufficient usage remaining')) {
+      if (
+        (err.message && err.message.includes("Usage limit exceeded")) ||
+        (err.message && err.message.includes("Monthly limit")) ||
+        (err.message && err.message.includes("Insufficient usage remaining"))
+      ) {
         handleUsageLimitError();
       } else {
         // Handle other errors normally
@@ -383,9 +442,11 @@ const Queue: React.FC<QueueProps> = ({ setView, onSignOut }) => {
         }
       } catch (err: any) {
         // Check if this is a usage limit error
-        if (err.message && err.message.includes('Usage limit exceeded') ||
-          err.message && err.message.includes('Monthly limit') ||
-          err.message && err.message.includes('Insufficient usage remaining')) {
+        if (
+          (err.message && err.message.includes("Usage limit exceeded")) ||
+          (err.message && err.message.includes("Monthly limit")) ||
+          (err.message && err.message.includes("Insufficient usage remaining"))
+        ) {
           handleUsageLimitError();
         } else {
           // Handle other errors normally
@@ -441,81 +502,166 @@ const Queue: React.FC<QueueProps> = ({ setView, onSignOut }) => {
 
   // Audio stream event handlers
   const handleQuestionDetected = (question: DetectedQuestion) => {
-    console.log('[Queue] Question detected (pre-refined):', question);
+    console.log("[Queue] Question detected (pre-refined):", question);
     // Questions now come pre-refined from the new immediate processing pipeline
-    setDetectedQuestions(prev => [...prev, question]);
+    setDetectedQuestions((prev) => [...prev, question]);
   };
 
   const handleAudioStreamStateChange = (state: AudioStreamState) => {
-    console.log('[Queue] Audio stream state changed:', state);
+    console.log("[Queue] Audio stream state changed:", state);
     setAudioStreamState(state);
+
+    // Update listening state
+    setIsListening(state.isListening || false);
+
+    // Update current audio source from state
+    if (state.currentAudioSource) {
+      setCurrentAudioSource(state.currentAudioSource);
+    }
+  };
+
+  // Audio source change handler
+  const handleAudioSourceChange = async (sourceId: string) => {
+    try {
+      console.log("[Queue] Switching audio source to:", sourceId);
+
+      // Clear previous errors
+      setAudioError(null);
+
+      // Switch the audio source in the backend
+      const result = await window.electronAPI.audioSwitchSource(sourceId);
+      if (!result.success) {
+        const errorMsg = result.error || "Failed to switch audio source";
+        console.error("[Queue] Failed to switch audio source:", result.error);
+        setAudioError(errorMsg);
+        return;
+      }
+
+      console.log("[Queue] Audio source switched successfully");
+    } catch (error) {
+      const errorMsg =
+        error instanceof Error ? error.message : "Error switching audio source";
+      console.error("[Queue] Error switching audio source:", error);
+      setAudioError(errorMsg);
+    }
   };
 
   // Auto-reopen question panel when recording starts
   useEffect(() => {
     if (audioStreamState?.isListening && !isQuestionPanelOpen) {
-      console.log('[Queue] Auto-reopening question panel for new recording session');
+      console.log(
+        "[Queue] Auto-reopening question panel for new recording session"
+      );
       setIsQuestionPanelOpen(true);
     }
   }, [audioStreamState?.isListening, isQuestionPanelOpen]);
 
-  const answersCacheRef = useRef<Map<string, { response: string; timestamp: number }>>(new Map());
+  const answersCacheRef = useRef<
+    Map<string, { response: string; timestamp: number }>
+  >(new Map());
 
-  const handleAnswerQuestion = async (question: DetectedQuestion, collectionId?: string): Promise<{ response: string; timestamp: number }> => {
+  const handleAnswerQuestion = async (
+    question: DetectedQuestion,
+    collectionId?: string
+  ): Promise<{ response: string; timestamp: number }> => {
     try {
-      console.log('[Queue] Answering question:', question.text, 'with collection:', collectionId);
+      console.log(
+        "[Queue] Answering question:",
+        question.text,
+        "with collection:",
+        collectionId
+      );
 
       // Memoization: return cached response if present
       const cached = answersCacheRef.current.get(question.id);
       if (cached) {
-        console.log('[Queue] Returning cached answer');
+        console.log("[Queue] Returning cached answer");
         // Also surface in chat to keep UX consistent
-        setChatMessages(prev => [
+        setChatMessages((prev) => [
           ...prev,
           { role: "user", text: question.text },
-          { role: "gemini", text: cached.response }
+          { role: "gemini", text: cached.response },
         ]);
         return cached;
       }
 
-      const result = await (window.electronAPI as any).audioStreamAnswerQuestion(
-        question.text,
-        collectionId
-      );
+      const result = await (
+        window.electronAPI as any
+      ).audioStreamAnswerQuestion(question.text, collectionId);
 
-      console.log('[Queue] Question answered:', result);
+      console.log("[Queue] Question answered:", result);
 
       // Show answer in chat
-      setChatMessages(prev => [
+      setChatMessages((prev) => [
         ...prev,
         { role: "user", text: question.text },
-        { role: "gemini", text: result.response }
+        { role: "gemini", text: result.response },
       ]);
 
       // Cache the result
       answersCacheRef.current.set(question.id, result);
       return result;
-
     } catch (error: any) {
-      console.error('[Queue] Failed to answer question:', error);
+      console.error("[Queue] Failed to answer question:", error);
 
       // Handle usage limit errors
-      if (error.message && (
-        error.message.includes('Usage limit exceeded') ||
-        error.message.includes('Monthly limit') ||
-        error.message.includes('Insufficient usage remaining')
-      )) {
+      if (
+        error.message &&
+        (error.message.includes("Usage limit exceeded") ||
+          error.message.includes("Monthly limit") ||
+          error.message.includes("Insufficient usage remaining"))
+      ) {
         handleUsageLimitError();
       } else {
-        setChatMessages(prev => [
+        setChatMessages((prev) => [
           ...prev,
           { role: "user", text: question.text },
-          { role: "gemini", text: "エラー: " + error.message }
+          { role: "gemini", text: "エラー: " + error.message },
         ]);
       }
       throw error;
     }
   };
+
+  // Audio Stream event listeners setup
+  useEffect(() => {
+    const cleanupFunctions = [
+      window.electronAPI.onAudioStreamStateChanged(
+        (state: AudioStreamState) => {
+          console.log("[Queue] Audio stream state changed:", state);
+          setAudioStreamState(state);
+
+          // Update listening state
+          setIsListening(state.isListening || false);
+
+          // Update current audio source from state
+          if (state.currentAudioSource) {
+            setCurrentAudioSource(state.currentAudioSource);
+          }
+        }
+      ),
+
+      window.electronAPI.onAudioStreamError((error: string) => {
+        console.error("[Queue] Audio stream error:", error);
+        setAudioError(error);
+
+        // Check if this is a fallback scenario
+        const isAutoFallback =
+          error.toLowerCase().includes("fallback") ||
+          error.toLowerCase().includes("using microphone") ||
+          error.toLowerCase().includes("restored");
+
+        if (!isAutoFallback) {
+          // Only update listening state for actual failures, not fallbacks
+          setIsListening(false);
+        }
+      }),
+    ];
+
+    return () => {
+      cleanupFunctions.forEach((cleanup) => cleanup());
+    };
+  }, []);
 
   // Keyboard shortcuts handler
   useEffect(() => {
@@ -542,17 +688,20 @@ const Queue: React.FC<QueueProps> = ({ setView, onSignOut }) => {
       } catch (error) {
         console.log("IPC setup skipped:", error);
       }
-      return () => { };
+      return () => {};
     };
 
     const cleanup = setupIpcListeners();
 
     // Add custom event listener for usage limit exceeded
-    document.addEventListener('usage-limit-exceeded', handleUsageLimitExceeded);
+    document.addEventListener("usage-limit-exceeded", handleUsageLimitExceeded);
 
     return () => {
       cleanup();
-      document.removeEventListener('usage-limit-exceeded', handleUsageLimitExceeded);
+      document.removeEventListener(
+        "usage-limit-exceeded",
+        handleUsageLimitExceeded
+      );
     };
   }, []);
 
@@ -631,14 +780,30 @@ const Queue: React.FC<QueueProps> = ({ setView, onSignOut }) => {
 
                 {/* Profile Dropdown Menu */}
                 {isProfileDropdownOpen && (
-                  <div className="absolute right-0 mt-4 w-36 morphism-dropdown shadow-lg z-50">
+                  <div className="absolute right-0 mt-4 w-64 morphism-dropdown shadow-lg z-50 max-h-96 overflow-y-auto">
                     <div className="py-1">
                       {/* Answer Mode Section */}
                       <div className="px-3 py-2 border-b border-white/10">
-                        <div className="text-xs text-white/60 mb-2">回答モード</div>
+                        <div className="text-xs text-white/60 mb-2">
+                          回答モード
+                        </div>
                         <ProfileModeSelector
                           currentMode={currentMode}
                           onModeChange={setCurrentMode}
+                        />
+                      </div>
+
+                      {/* Audio Settings Section */}
+                      <div className="px-3 py-2 border-b border-white/10">
+                        <div className="text-xs text-white/60 mb-2">
+                          オーディオ設定
+                        </div>
+                        <AudioSettings
+                          currentSource={currentAudioSource}
+                          onSourceChange={handleAudioSourceChange}
+                          disabled={isListening}
+                          isListening={isListening}
+                          error={audioError}
                         />
                       </div>
 
@@ -690,8 +855,16 @@ const Queue: React.FC<QueueProps> = ({ setView, onSignOut }) => {
 
               {/* Error Icon and Title */}
               <div className="mb-2 text-sm font-medium text-red-400 flex items-center gap-2">
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                <svg
+                  className="w-4 h-4"
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                    clipRule="evenodd"
+                  />
                 </svg>
                 <span>月間利用制限に達しました</span>
               </div>
@@ -739,13 +912,15 @@ const Queue: React.FC<QueueProps> = ({ setView, onSignOut }) => {
                 </svg>
               </button>
 
-
-
               {/* Chat Messages Area - Flexible height */}
               <div className="flex-1 flex flex-col min-h-0">
                 {chatMessages.length === 0 ? (
                   <div className="text-sm text-white/80 text-center mt-8 pr-8 mb-3">
-                    <img src="/logo.png" alt="CueMe Logo" className="w-5 h-5 mx-auto mb-2" />
+                    <img
+                      src="/logo.png"
+                      alt="CueMe Logo"
+                      className="w-5 h-5 mx-auto mb-2"
+                    />
                     CueMeとチャット
                     <br />
                     <span className="text-xs text-white/50">
@@ -757,14 +932,16 @@ const Queue: React.FC<QueueProps> = ({ setView, onSignOut }) => {
                     {chatMessages.map((msg, idx) => (
                       <div
                         key={idx}
-                        className={`w-full flex ${msg.role === "user" ? "justify-end" : "justify-start"
-                          } mb-3`}
+                        className={`w-full flex ${
+                          msg.role === "user" ? "justify-end" : "justify-start"
+                        } mb-3`}
                       >
                         <div
-                          className={`max-w-[80%] px-3 py-1.5 rounded-xl text-xs border ${msg.role === "user"
-                            ? "bg-gray-800/60 backdrop-blur-md text-gray-100 ml-12 border-gray-600/40"
-                            : "morphism-dropdown text-white/90 mr-12"
-                            }`}
+                          className={`max-w-[80%] px-3 py-1.5 rounded-xl text-xs border ${
+                            msg.role === "user"
+                              ? "bg-gray-800/60 backdrop-blur-md text-gray-100 ml-12 border-gray-600/40"
+                              : "morphism-dropdown text-white/90 mr-12"
+                          }`}
                           style={{ wordBreak: "break-word", lineHeight: "1.4" }}
                         >
                           {msg.text}
@@ -839,43 +1016,46 @@ const Queue: React.FC<QueueProps> = ({ setView, onSignOut }) => {
           )}
 
           {/* Question Panel - Wider and centered relative to floating bar system */}
-          {isQuestionPanelOpen && (detectedQuestions.length > 0 || audioStreamState?.isListening) && (
-            <div
-              className="mt-4 w-full max-w-2xl relative"
-              style={{ height: `${questionResize.height}px` }}
-            >
-              <QuestionSidePanel
-                questions={detectedQuestions}
-                audioStreamState={audioStreamState}
-                onAnswerQuestion={handleAnswerQuestion}
-                responseMode={responseMode}
-                className="w-full h-full"
-                onClose={() => {
-                  // Stop listening session if active
-                  if (audioStreamState?.isListening && queueCommandsRef.current?.stopListening) {
-                    queueCommandsRef.current.stopListening();
-                  }
-                  
-                  // Clear questions via backend
-                  if (window.electronAPI?.audioStreamClearQuestions) {
-                    window.electronAPI.audioStreamClearQuestions();
-                  }
-                  
-                  // Clear frontend questions state
-                  setDetectedQuestions([]);
-                  
-                  // Close the panel
-                  setIsQuestionPanelOpen(false);
-                }}
-              />
+          {isQuestionPanelOpen &&
+            (detectedQuestions.length > 0 || audioStreamState?.isListening) && (
+              <div
+                className="mt-4 w-full max-w-2xl relative"
+                style={{ height: `${questionResize.height}px` }}
+              >
+                <QuestionSidePanel
+                  questions={detectedQuestions}
+                  audioStreamState={audioStreamState}
+                  onAnswerQuestion={handleAnswerQuestion}
+                  responseMode={responseMode}
+                  className="w-full h-full"
+                  onClose={() => {
+                    // Stop listening session if active
+                    if (
+                      audioStreamState?.isListening &&
+                      queueCommandsRef.current?.stopListening
+                    ) {
+                      queueCommandsRef.current.stopListening();
+                    }
 
-              {/* Resize Handle */}
-              <questionResize.ResizeHandle />
-            </div>
-          )}
+                    // Clear questions via backend
+                    if (window.electronAPI?.audioStreamClearQuestions) {
+                      window.electronAPI.audioStreamClearQuestions();
+                    }
+
+                    // Clear frontend questions state
+                    setDetectedQuestions([]);
+
+                    // Close the panel
+                    setIsQuestionPanelOpen(false);
+                  }}
+                />
+
+                {/* Resize Handle */}
+                <questionResize.ResizeHandle />
+              </div>
+            )}
         </div>
       </div>
-
 
       <div ref={contentRef}>
         <ScreenshotQueue

@@ -1,5 +1,13 @@
 export import { AudioStreamState, DetectedQuestion } from './audio-stream'
 
+// Audio source type
+interface AudioSource {
+  id: string;
+  name: string;
+  type: 'microphone' | 'system';
+  available: boolean;
+}
+
 interface ElectronAPI {
   updateContentDimensions: (dimensions: {
     width: number
@@ -42,7 +50,7 @@ interface ElectronAPI {
   onAuthStateChange: (callback: (state: { user: any | null; session: any | null; isLoading: boolean }) => void) => () => void
   
   // Audio Stream methods
-  audioStreamStart: () => Promise<{ success: boolean; error?: string }>
+  audioStreamStart: (sourceId?: string) => Promise<{ success: boolean; error?: string }>
   audioStreamStop: () => Promise<{ success: boolean; error?: string }>
   audioStreamProcessChunk: (audioData: Buffer) => Promise<{ success: boolean; error?: string }>
   audioStreamGetState: () => Promise<AudioStreamState>
@@ -50,11 +58,18 @@ interface ElectronAPI {
   audioStreamClearQuestions: () => Promise<{ success: boolean; error?: string }>
   audioStreamAnswerQuestion: (questionText: string, collectionId?: string) => Promise<{ response: string; timestamp: number }>
   
+  // System Audio methods
+  audioGetSources: () => Promise<{ success: boolean; sources: AudioSource[]; error?: string }>
+  audioSwitchSource: (sourceId: string) => Promise<{ success: boolean; error?: string }>
+  audioRequestPermissions: () => Promise<{ granted: boolean; error?: string }>
+  audioCheckSystemSupport: () => Promise<{ supported: boolean }>
+  
   // Audio Stream event listeners
   onAudioQuestionDetected: (callback: (question: DetectedQuestion) => void) => () => void
   onAudioBatchProcessed: (callback: (questions: DetectedQuestion[]) => void) => () => void
   onAudioStreamStateChanged: (callback: (state: AudioStreamState) => void) => () => void
   onAudioStreamError: (callback: (error: string) => void) => () => void
+  onChatToggle: (callback: () => void) => () => void
 }
 
 declare global {
