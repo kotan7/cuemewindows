@@ -36,7 +36,7 @@
     "compression": "maximum",
     "mac": {
       "category": "public.app-category.productivity",
-      "icon": "public/logo.png",
+      "icon": "assets/logo.icns",
       "target": [
         {
           "target": "dmg",
@@ -57,7 +57,9 @@
       "gatekeeperAssess": false,
       "entitlements": "assets/entitlements.mac.plist",
       "entitlementsInherit": "assets/entitlements.mac.plist",
-      "notarize": false
+      "notarize": {
+        "teamId": "${4KS6YS23KT}"
+      }
     },
     "win": {
       "target": [
