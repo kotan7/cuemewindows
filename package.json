@@ -58,7 +58,7 @@
       "entitlements": "assets/entitlements.mac.plist",
       "entitlementsInherit": "assets/entitlements.mac.plist",
       "notarize": {
-        "teamId": "${4KS6YS23KT}"
+        "teamId": "${APPLE_TEAM_ID}"
       }
     },
     "win": {
