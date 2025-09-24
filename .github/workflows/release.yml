@@ -106,16 +106,22 @@ jobs:
             exit 1
           fi
           
-          # Check for Apple ID notarization secrets
-          if [ -z "${{ secrets.APPLE_ID }}" ]; then
-            echo "❌ Error: APPLE_ID secret is missing"
-            echo "This should contain your Apple ID email address"
+          # Check for Apple API Key notarization secrets
+          if [ -z "${{ secrets.APPLE_API_KEY }}" ]; then
+            echo "❌ Error: APPLE_API_KEY secret is missing"
+            echo "This should contain your Apple API Key (.p8 file content)"
             exit 1
           fi
           
-          if [ -z "${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}" ]; then
-            echo "❌ Error: APPLE_APP_SPECIFIC_PASSWORD secret is missing"
-            echo "This should contain your app-specific password from Apple ID"
+          if [ -z "${{ secrets.APPLE_API_KEY_ID }}" ]; then
+            echo "❌ Error: APPLE_API_KEY_ID secret is missing"
+            echo "This should contain your Apple API Key ID"
+            exit 1
+          fi
+          
+          if [ -z "${{ secrets.APPLE_API_ISSUER }}" ]; then
+            echo "❌ Error: APPLE_API_ISSUER secret is missing"
+            echo "This should contain your Apple API Issuer ID"
             exit 1
           fi
           
@@ -132,10 +138,10 @@ jobs:
             exit 1
           fi
           
-          # Validate APPLE_ID format (email)
-          if [[ ! "${{ secrets.APPLE_ID }}" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
-            echo "❌ Error: APPLE_ID format is invalid"
-            echo "Expected: Valid email address"
+          # Validate APPLE_API_KEY_ID format (10 characters, alphanumeric)
+          if [[ ! "${{ secrets.APPLE_API_KEY_ID }}" =~ ^[A-Z0-9]{10}$ ]]; then
+            echo "❌ Error: APPLE_API_KEY_ID format is invalid"
+            echo "Expected: 10-character alphanumeric string (e.g., ABCD123456)"
             exit 1
           fi
           
@@ -148,9 +154,10 @@ jobs:
           # macOS Code Signing
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-          # macOS Notarization - Apple ID Method
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          # macOS Notarization - Apple API Key Method
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           # Enable detailed logging for debugging
           DEBUG: electron-builder

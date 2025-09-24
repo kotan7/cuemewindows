@@ -58,7 +58,10 @@
       "entitlements": "assets/entitlements.mac.plist",
       "entitlementsInherit": "assets/entitlements.mac.plist",
       "notarize": {
-        "teamId": "${APPLE_TEAM_ID}"
+        "teamId": "${APPLE_TEAM_ID}",
+        "appleApiKey": "${APPLE_API_KEY}",
+        "appleApiKeyId": "${APPLE_API_KEY_ID}",
+        "appleApiIssuer": "${APPLE_API_ISSUER}"
       }
     },
     "win": {
