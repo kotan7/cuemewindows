@@ -97,6 +97,22 @@ jobs:
           echo "APPLE_ID is set: ${{ secrets.APPLE_ID != '' }}"
           echo "APPLE_APP_SPECIFIC_PASSWORD is set: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD != '' }}"
           echo "APPLE_TEAM_ID is set: ${{ secrets.APPLE_TEAM_ID != '' }}"
+          
+          # Validate Apple Team ID format
+          if [ -n "${{ secrets.APPLE_TEAM_ID }}" ]; then
+            TEAM_ID="${{ secrets.APPLE_TEAM_ID }}"
+            if [[ ${#TEAM_ID} -eq 10 && "$TEAM_ID" =~ ^[A-Z0-9]+$ ]]; then
+              echo "✅ Apple Team ID format is valid: $TEAM_ID"
+            else
+              echo "❌ Apple Team ID format is invalid: $TEAM_ID"
+              echo "Expected: 10-character alphanumeric string (e.g., ABCD123456)"
+              echo "Find your Team ID at: https://developer.apple.com/account/ → Membership → Team ID"
+              exit 1
+            fi
+          else
+            echo "❌ APPLE_TEAM_ID secret is not set"
+            exit 1
+          fi
 
       - name: Build and release Electron app
         shell: bash
