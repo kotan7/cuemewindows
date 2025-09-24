@@ -147,6 +147,15 @@ jobs:
           
           echo "✅ All required macOS secrets are present and valid"
 
+      # Prepare Apple API Key file for macOS notarization
+      - name: Prepare Apple API Key
+        if: matrix.platform == 'mac'
+        run: |
+          echo "📝 Creating Apple API Key file from base64 secret..."
+          echo "${{ secrets.APPLE_API_KEY }}" | base64 --decode > /tmp/AuthKey_${{ secrets.APPLE_API_KEY_ID }}.p8
+          chmod 600 /tmp/AuthKey_${{ secrets.APPLE_API_KEY_ID }}.p8
+          echo "✅ Apple API Key file created at /tmp/AuthKey_${{ secrets.APPLE_API_KEY_ID }}.p8"
+
       - name: Build and release Electron app
         shell: bash
         env:
@@ -154,8 +163,8 @@ jobs:
           # macOS Code Signing
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-          # macOS Notarization - Apple API Key Method
-          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          # macOS Notarization - Apple API Key Method (file path)
+          APPLE_API_KEY: /tmp/AuthKey_${{ secrets.APPLE_API_KEY_ID }}.p8
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
@@ -228,6 +237,14 @@ jobs:
           set -e  # Re-enable exit on error
           
           echo "✅ Build and release completed successfully for ${{ matrix.platform }}"
+
+      # Clean up Apple API Key file for security
+      - name: Clean up Apple API Key
+        if: matrix.platform == 'mac' && always()
+        run: |
+          echo "🧹 Cleaning up temporary Apple API Key file..."
+          rm -f /tmp/AuthKey_${{ secrets.APPLE_API_KEY_ID }}.p8
+          echo "✅ Apple API Key file cleaned up"
 
       - name: Debug - List build artifacts
         shell: bash
