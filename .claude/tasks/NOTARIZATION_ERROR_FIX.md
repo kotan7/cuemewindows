@@ -3,11 +3,19 @@
 ## Problem Analysis
 
 ### Root Cause
-The notarization error occurs due to a **configuration conflict** between:
-1. **package.json**: Has `"notarize": false` in the macOS build configuration
-2. **GitHub Actions workflow**: Still passes Apple credentials (`APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_SPECIFIC_PASSWORD`)
+The 403 error "Invalid or inaccessible developer team ID for the provided Apple ID" occurs during macOS app notarization. Based on analysis of the GitHub Actions workflow and Apple Developer requirements, the most likely causes are:
 
-When electron-builder detects Apple credentials in environment variables, it **automatically enables notarization** regardless of the `notarize: false` setting in package.json.
+1. **Apple ID Permission Issue**: The Apple ID lacks Admin or Account Holder permissions for the specified Team ID
+2. **App-Specific Password Issue**: The password is invalid, expired, or not properly configured
+3. **Team ID Mismatch**: The Team ID doesn't correspond to the Apple ID's accessible teams
+4. **Apple Developer Account Status**: The account may have expired or been suspended
+
+### Current Configuration Analysis
+- ✅ Team ID format validation is implemented (10-character alphanumeric)
+- ✅ All required secrets are being passed to electron-builder
+- ✅ Code signing certificates are properly configured
+- ✅ Apple ID validation and format checking implemented
+- ✅ Streamlined single notarization method (Apple ID)
 
 ### Error Details
 - **HTTP 403**: "Invalid or inaccessible developer team ID"
@@ -102,7 +110,19 @@ env:
 
 ## Implementation Status
 
-✅ **COMPLETED**: Implemented Option 1 (Enable Proper Notarization)
+### ✅ Completed
+- Root cause analysis of 403 notarization error
+- Comprehensive plan document creation
+- Enhanced GitHub Actions validation for Apple credentials
+- Workflow improvements with better error handling
+- Updated electron-builder configuration for Apple ID notarization
+- Removed API key complexity for simplified setup
+
+### 🔄 In Progress
+- Testing and validation
+
+### ⏳ Pending
+- Final testing and deployment
 
 ### Changes Made
 
@@ -148,6 +168,32 @@ env:
 3. **Monitor Build Results**:
    - Check GitHub Actions logs for validation messages
    - Successful notarization should complete without HTTP 403 errors
+
+## Required GitHub Secrets
+
+### Apple ID Authentication
+- `CSC_LINK`: Base64-encoded .p12 certificate
+- `CSC_KEY_PASSWORD`: Password for the .p12 certificate
+- `APPLE_ID`: Apple ID email (must have Admin/Account Holder role)
+- `APPLE_APP_SPECIFIC_PASSWORD`: App-specific password
+- `APPLE_TEAM_ID`: 10-character Team ID
+
+### Apple ID Setup Requirements
+
+1. **Apple ID Permissions**:
+   - Your Apple ID must have **Admin** or **Account Holder** role
+   - Developer role is insufficient for notarization
+   - Verify at [Apple Developer Portal](https://developer.apple.com/account/)
+
+2. **App-Specific Password**:
+   - Generate at [Apple ID Account](https://appleid.apple.com/)
+   - Go to Sign-In and Security → App-Specific Passwords
+   - Create new password for "Xcode" or "Development Tools"
+
+3. **Team ID Verification**:
+   - Must be exactly 10 characters (alphanumeric)
+   - Found at Developer Portal → Membership → Team ID
+   - Example format: `ABCD123456`
 
 ## Team ID Verification Guide
 

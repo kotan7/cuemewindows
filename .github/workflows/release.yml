@@ -87,32 +87,59 @@ jobs:
           sudo apt-get install -y libnss3-dev libatk-bridge2.0-dev libdrm2 libxkbcommon-dev libxss1 libasound2-dev libxtst6 libatspi2.0-0 libdrm2 libxdamage1 libxrandr2 libgbm1 libxcomposite1 libxcursor1 libxi6 libgtk-3-0
           echo "Linux dependencies installed successfully"
 
-      # macOS code signing will be handled automatically by electron-builder using GitHub secrets
-      - name: Verify macOS code signing setup
+      # Validate macOS code signing and notarization secrets
+      - name: Validate macOS secrets
         if: matrix.platform == 'mac'
         run: |
-          echo "Using GitHub secrets for macOS code signing..."
-          echo "CSC_LINK is set: ${{ secrets.CSC_LINK != '' }}"
-          echo "CSC_KEY_PASSWORD is set: ${{ secrets.CSC_KEY_PASSWORD != '' }}"
-          echo "APPLE_ID is set: ${{ secrets.APPLE_ID != '' }}"
-          echo "APPLE_APP_SPECIFIC_PASSWORD is set: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD != '' }}"
-          echo "APPLE_TEAM_ID is set: ${{ secrets.APPLE_TEAM_ID != '' }}"
+          echo "Validating macOS code signing and notarization secrets..."
           
-          # Validate Apple Team ID format
-          if [ -n "${{ secrets.APPLE_TEAM_ID }}" ]; then
-            TEAM_ID="${{ secrets.APPLE_TEAM_ID }}"
-            if [[ ${#TEAM_ID} -eq 10 && "$TEAM_ID" =~ ^[A-Z0-9]+$ ]]; then
-              echo "✅ Apple Team ID format is valid: $TEAM_ID"
-            else
-              echo "❌ Apple Team ID format is invalid: $TEAM_ID"
-              echo "Expected: 10-character alphanumeric string (e.g., ABCD123456)"
-              echo "Find your Team ID at: https://developer.apple.com/account/ → Membership → Team ID"
-              exit 1
-            fi
-          else
-            echo "❌ APPLE_TEAM_ID secret is not set"
+          # Check for code signing secrets (always required)
+          if [ -z "${{ secrets.CSC_LINK }}" ]; then
+            echo "❌ Error: CSC_LINK secret is missing"
+            echo "This should contain your .p12 certificate file (base64 encoded)"
             exit 1
           fi
+          
+          if [ -z "${{ secrets.CSC_KEY_PASSWORD }}" ]; then
+            echo "❌ Error: CSC_KEY_PASSWORD secret is missing"
+            echo "This should contain the password for your .p12 certificate"
+            exit 1
+          fi
+          
+          # Check for Apple ID notarization secrets
+          if [ -z "${{ secrets.APPLE_ID }}" ]; then
+            echo "❌ Error: APPLE_ID secret is missing"
+            echo "This should contain your Apple ID email address"
+            exit 1
+          fi
+          
+          if [ -z "${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}" ]; then
+            echo "❌ Error: APPLE_APP_SPECIFIC_PASSWORD secret is missing"
+            echo "This should contain your app-specific password from Apple ID"
+            exit 1
+          fi
+          
+          if [ -z "${{ secrets.APPLE_TEAM_ID }}" ]; then
+            echo "❌ Error: APPLE_TEAM_ID secret is missing"
+            echo "This should contain your 10-character Apple Team ID"
+            exit 1
+          fi
+          
+          # Validate APPLE_TEAM_ID format (10 characters, alphanumeric)
+          if [[ ! "${{ secrets.APPLE_TEAM_ID }}" =~ ^[A-Z0-9]{10}$ ]]; then
+            echo "❌ Error: APPLE_TEAM_ID format is invalid"
+            echo "Expected: 10-character alphanumeric string (e.g., ABCD123456)"
+            exit 1
+          fi
+          
+          # Validate APPLE_ID format (email)
+          if [[ ! "${{ secrets.APPLE_ID }}" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
+            echo "❌ Error: APPLE_ID format is invalid"
+            echo "Expected: Valid email address"
+            exit 1
+          fi
+          
+          echo "✅ All required macOS secrets are present and valid"
 
       - name: Build and release Electron app
         shell: bash
@@ -121,28 +148,79 @@ jobs:
           # macOS Code Signing
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-          # macOS Notarization
+          # macOS Notarization - Apple ID Method
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Enable detailed logging for debugging
+          DEBUG: electron-builder
         run: |
-          echo "Building and releasing for platform: ${{ matrix.platform }}"
+          echo "🚀 Building and releasing for platform: ${{ matrix.platform }}"
           
           # Run the build script
-          echo "Running build script..."
+          echo "📦 Running build script..."
           npm run build
           
-          # Run electron-builder with platform-specific arguments
-          echo "Running electron-builder..."
+          # Run electron-builder with platform-specific arguments and enhanced error handling
+          echo "🔨 Running electron-builder..."
+          
+          set +e  # Don't exit on error immediately
+          
           if [ "${{ matrix.platform }}" = "mac" ]; then
-            npx electron-builder --mac --publish always
+            echo "🍎 Building for macOS with notarization..."
+            npx electron-builder --mac --publish always 2>&1 | tee build.log
+            BUILD_EXIT_CODE=${PIPESTATUS[0]}
           elif [ "${{ matrix.platform }}" = "win" ]; then
-            npx electron-builder --win --publish always
+            echo "🪟 Building for Windows..."
+            npx electron-builder --win --publish always 2>&1 | tee build.log
+            BUILD_EXIT_CODE=${PIPESTATUS[0]}
           elif [ "${{ matrix.platform }}" = "linux" ]; then
-            npx electron-builder --linux --publish always
+            echo "🐧 Building for Linux..."
+            npx electron-builder --linux --publish always 2>&1 | tee build.log
+            BUILD_EXIT_CODE=${PIPESTATUS[0]}
           fi
           
-          echo "Build and release completed for ${{ matrix.platform }}"
+          # Check for specific notarization errors and provide helpful guidance
+          if [ $BUILD_EXIT_CODE -ne 0 ]; then
+            echo "❌ Build failed with exit code: $BUILD_EXIT_CODE"
+            
+            if [ "${{ matrix.platform }}" = "mac" ]; then
+              echo "🔍 Analyzing macOS build failure..."
+              
+              # Check for common notarization errors
+              if grep -q "HTTP status code: 403" build.log; then
+                echo "🚨 NOTARIZATION ERROR DETECTED: HTTP 403"
+                echo ""
+                echo "📋 This error typically means:"
+                echo "   1. Apple ID lacks Admin/Account Holder permissions for Team ID"
+                echo "   2. App-Specific Password is invalid or expired"
+                echo "   3. Team ID doesn't match Apple ID's accessible teams"
+                echo ""
+                echo "🔧 Troubleshooting Steps:"
+                echo "   1. Verify Apple ID has Admin role: https://developer.apple.com/account/"
+                echo "   2. Generate new App-Specific Password: https://appleid.apple.com/"
+                echo "   3. Confirm Team ID matches: Developer Account → Membership → Team ID"
+                echo "   4. Check Apple Developer Program status (not expired)"
+                echo ""
+                echo "💡 Alternative: Consider using Apple API Keys instead of Apple ID"
+              elif grep -q "notarytool" build.log; then
+                echo "🚨 NOTARIZATION TOOL ERROR DETECTED"
+                echo "Check the notarytool configuration and credentials"
+              elif grep -q "code signing" build.log; then
+                echo "🚨 CODE SIGNING ERROR DETECTED"
+                echo "Check CSC_LINK and CSC_KEY_PASSWORD secrets"
+              fi
+              
+              echo ""
+              echo "📄 Full build log available above for detailed analysis"
+            fi
+            
+            exit $BUILD_EXIT_CODE
+          fi
+          
+          set -e  # Re-enable exit on error
+          
+          echo "✅ Build and release completed successfully for ${{ matrix.platform }}"
 
       - name: Debug - List build artifacts
         shell: bash
