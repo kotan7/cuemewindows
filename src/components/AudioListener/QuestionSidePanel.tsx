@@ -198,7 +198,7 @@ const QuestionSidePanel: React.FC<QuestionSidePanelProps> = ({
         {/* Right Panel - Answer */}
         <div className="flex-1 liquid-glass chat-container p-4 flex flex-col">
           <div className="flex items-center gap-2 mb-3 flex-shrink-0">
-            <img src="/logo.png" alt="CueMe Logo" className="w-4 h-4" />
+            <img src="./logo.png" alt="CueMe Logo" className="w-4 h-4" />
             <span className="text-sm font-medium text-white/90">AI回答</span>
           </div>
           

@@ -917,7 +917,7 @@ const Queue: React.FC<QueueProps> = ({ setView, onSignOut }) => {
                 {chatMessages.length === 0 ? (
                   <div className="text-sm text-white/80 text-center mt-8 pr-8 mb-3">
                     <img
-                      src="/logo.png"
+                      src="./logo.png"
                       alt="CueMe Logo"
                       className="w-5 h-5 mx-auto mb-2"
                     />

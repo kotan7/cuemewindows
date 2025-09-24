@@ -977,7 +977,7 @@ const QueueCommands = forwardRef<QueueCommandsRef, QueueCommandsProps>(
         <div className="text-xs text-white/90 liquid-glass-bar py-2 px-3 flex items-center justify-center gap-3 draggable-area overflow-visible">
           {/* Logo */}
           <div className="flex items-center gap-2">
-            <img src="/logo.png" alt="CueMe Logo" className="w-4 h-4" />
+            <img src="./logo.png" alt="CueMe Logo" className="w-4 h-4" />
           </div>
 
           {/* Separator */}
@@ -1100,7 +1100,7 @@ const QueueCommands = forwardRef<QueueCommandsRef, QueueCommandsProps>(
           >
             {/* AI Response Label with Logo */}
             <div className="mb-2 text-sm font-medium text-white/80 flex items-center gap-2">
-              <img src="/logo.png" alt="CueMe Logo" className="w-4 h-4" />
+              <img src="./logo.png" alt="CueMe Logo" className="w-4 h-4" />
               <span>AI回答</span>
             </div>
 
