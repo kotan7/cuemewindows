@@ -65,6 +65,10 @@
       "entitlementsInherit": "assets/entitlements.mac.plist",
       "notarize": {
         "teamId": "${APPLE_TEAM_ID}"
+      },
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "CueMe needs microphone access to listen for questions during interviews and provide real-time assistance.",
+        "NSScreenCaptureDescription": "CueMe needs screen recording permission to capture system audio from applications like Zoom for enhanced interview assistance."
       }
     },
     "win": {

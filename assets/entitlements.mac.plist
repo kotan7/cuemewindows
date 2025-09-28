@@ -12,5 +12,11 @@
     <true/>
     <key>com.apple.security.cs.allow-dyld-environment-variables</key>
     <true/>
+    <!-- Microphone access permission -->
+    <key>com.apple.security.device.microphone</key>
+    <true/>
+    <!-- Screen recording permission for system audio -->
+    <key>com.apple.security.device.screen-capture</key>
+    <true/>
   </dict>
 </plist>

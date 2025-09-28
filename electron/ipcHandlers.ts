@@ -1,6 +1,7 @@
 // ipcHandlers.ts
 
 import { ipcMain, app, shell } from "electron"
+import path from "path"
 import { AppState } from "./main"
 
 export function initializeIpcHandlers(appState: AppState): void {
@@ -405,13 +406,145 @@ export function initializeIpcHandlers(appState: AppState): void {
     }
   });
 
+  // Protocol handler status check
+  ipcMain.handle("check-protocol-handler", async () => {
+    try {
+      console.log('[IPC] Checking protocol handler status...')
+      const isDefaultForProtocol = app.isDefaultProtocolClient('cueme')
+      console.log('[IPC] Is default protocol client for cueme://', isDefaultForProtocol)
+      
+      return { 
+        success: true, 
+        isDefault: isDefaultForProtocol,
+        platform: process.platform,
+        processArgs: process.argv
+      }
+    } catch (error: any) {
+      console.error('[IPC] Error checking protocol handler:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  // Force protocol registration
+  ipcMain.handle("register-protocol-handler", async () => {
+    try {
+      console.log('[IPC] Enhanced protocol registration attempt...')
+      
+      let result = false
+      const methods = []
+      
+      if (process.defaultApp) {
+        console.log('[IPC] Development mode - trying enhanced registration')
+        console.log('[IPC] Process execPath:', process.execPath)
+        console.log('[IPC] Process argv:', process.argv)
+        console.log('[IPC] Current working directory:', process.cwd())
+        
+        // Method 1: With process args
+        if (process.argv.length >= 2) {
+          result = app.setAsDefaultProtocolClient('cueme', process.execPath, [path.resolve(process.argv[1])])
+          methods.push(`Method 1 (args): ${result}`)
+          console.log('[IPC] Method 1 result:', result)
+        }
+        
+        // Method 2: Simple
+        if (!result) {
+          result = app.setAsDefaultProtocolClient('cueme')
+          methods.push(`Method 2 (simple): ${result}`)
+          console.log('[IPC] Method 2 result:', result)
+        }
+        
+        // Method 3: With cwd
+        if (!result) {
+          result = app.setAsDefaultProtocolClient('cueme', process.execPath, [process.cwd()])
+          methods.push(`Method 3 (cwd): ${result}`)
+          console.log('[IPC] Method 3 result:', result)
+        }
+        
+        // Method 4: macOS specific remove+register
+        if (!result && process.platform === 'darwin') {
+          app.removeAsDefaultProtocolClient('cueme')
+          await new Promise(resolve => setTimeout(resolve, 500))
+          result = app.setAsDefaultProtocolClient('cueme')
+          methods.push(`Method 4 (remove+register): ${result}`)
+          console.log('[IPC] Method 4 result:', result)
+        }
+        
+        // Method 5: Enhanced macOS registration with detailed logging
+        if (!result && process.platform === 'darwin') {
+          console.log('[IPC] Trying enhanced macOS registration...')
+          app.removeAsDefaultProtocolClient('cueme')
+          await new Promise(resolve => setTimeout(resolve, 1000))
+          
+          // Try with explicit paths
+          const electronPath = process.execPath
+          const mainScript = path.resolve(process.argv[1])
+          console.log('[IPC] Using paths - Electron:', electronPath, 'Script:', mainScript)
+          
+          result = app.setAsDefaultProtocolClient('cueme', electronPath, [mainScript])
+          methods.push(`Method 5 (enhanced macOS): ${result}`)
+          console.log('[IPC] Method 5 result:', result)
+        }
+        
+        // Method 5: Alternative executable path
+        if (!result && process.platform === 'darwin') {
+          const altPath = process.execPath.replace('Electron.app/Contents/MacOS/Electron', 'Electron')
+          result = app.setAsDefaultProtocolClient('cueme', altPath, ['.'])
+          methods.push(`Method 5 (alt path): ${result}`)
+        }
+      } else {
+        result = app.setAsDefaultProtocolClient('cueme')
+        methods.push(`Production: ${result}`)
+      }
+      
+      // Wait and verify
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      const isRegistered = app.isDefaultProtocolClient('cueme')
+      
+      console.log('[IPC] Registration methods tried:', methods)
+      console.log('[IPC] Final verification:', isRegistered)
+      
+      return { 
+        success: true, 
+        registered: result,
+        verified: isRegistered,
+        platform: process.platform,
+        methods: methods,
+        note: !isRegistered && process.platform === 'darwin' ? 
+          'macOS development limitation: verification may fail but functionality might work' : ''
+      }
+    } catch (error: any) {
+      console.error('[IPC] Error in enhanced protocol registration:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  // Deep link testing handler for debugging
+  ipcMain.handle("test-deep-link", async (event, url: string, testMode: boolean = true) => {
+    try {
+      console.log('[IPC] Testing deep link manually:', url)
+      console.log('[IPC] Test mode:', testMode)
+      const { handleDeepLink } = await import('./main')
+      handleDeepLink(appState, url, testMode)
+      return { success: true, message: 'Deep link test initiated', testMode }
+    } catch (error: any) {
+      console.error('[IPC] Error testing deep link:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
   ipcMain.handle("open-external-url", async (event, url: string) => {
     try {
-      await shell.openExternal(url);
-      return { success: true };
+      console.log('[IPC] Opening external URL:', url)
+      await shell.openExternal(url)
+      console.log('[IPC] ✅ External URL opened successfully')
+      return { success: true }
     } catch (error: any) {
-      console.error("Error opening external URL:", error);
-      return { success: false, error: error.message };
+      console.error('[IPC] ❌ Error opening external URL:', error)
+      console.error('[IPC] Error details:', {
+        message: error.message,
+        stack: error.stack
+      })
+      return { success: false, error: error.message }
     }
   });
 

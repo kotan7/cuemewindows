@@ -34,12 +34,19 @@ export class AuthService {
   }
 
   private async initialize() {
+    console.log('[AuthService] Initializing authentication service...')
     try {
       // Get the current session
+      console.log('[AuthService] Getting current session...')
       const { data: { session }, error } = await this.supabase.auth.getSession()
       
       if (error) {
-        console.error('Error getting session:', error)
+        console.error('[AuthService] Error getting session:', error)
+      } else {
+        console.log('[AuthService] Session retrieved:')
+        console.log('[AuthService] - Has session:', !!session)
+        console.log('[AuthService] - User email:', session?.user?.email || 'null')
+        console.log('[AuthService] - Expires at:', session?.expires_at || 'null')
       }
 
       this.updateAuthState({
@@ -50,7 +57,13 @@ export class AuthService {
 
       // Listen for auth changes
       this.supabase.auth.onAuthStateChange((event, session) => {
-        console.log('Auth state changed:', event, session?.user?.email)
+        console.log('[AuthService] ============================')
+        console.log('[AuthService] Auth state changed!')
+        console.log('[AuthService] - Event:', event)
+        console.log('[AuthService] - User email:', session?.user?.email || 'null')
+        console.log('[AuthService] - User ID:', session?.user?.id || 'null')
+        console.log('[AuthService] - Session expires:', session?.expires_at || 'null')
+        console.log('[AuthService] ============================')
         
         // Update auth state
         this.updateAuthState({
@@ -61,17 +74,31 @@ export class AuthService {
 
         // Handle window visibility after successful sign in
         if (event === 'SIGNED_IN' && session?.user) {
-          const mainWindow = require('electron').BrowserWindow.getAllWindows()[0]
+          console.log('[AuthService] User signed in, managing window visibility...')
+          const { BrowserWindow } = require('electron')
+          const mainWindow = BrowserWindow.getAllWindows()[0]
+          
           if (mainWindow) {
+            console.log('[AuthService] Main window found, bringing to front...')
             setTimeout(() => {
+              console.log('[AuthService] Executing window visibility actions...')
               mainWindow.setAlwaysOnTop(true, 'floating')
               mainWindow.moveTop()
+              console.log('[AuthService] Window visibility actions completed')
             }, 1000) // Give time for the UI to update
+          } else {
+            console.error('[AuthService] No main window found for visibility management')
           }
         }
       })
+      
+      console.log('[AuthService] Auth service initialization completed')
     } catch (error) {
-      console.error('Error initializing auth:', error)
+      console.error('[AuthService] Error initializing auth:', error)
+      console.error('[AuthService] Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : 'No stack trace'
+      })
       this.updateAuthState({
         user: null,
         session: null,
@@ -81,8 +108,23 @@ export class AuthService {
   }
 
   private updateAuthState(newState: AuthState) {
+    console.log('[AuthService] Updating auth state:')
+    console.log('[AuthService] - Previous user:', this.authState.user?.email || 'null')
+    console.log('[AuthService] - New user:', newState.user?.email || 'null')
+    console.log('[AuthService] - Previous loading:', this.authState.isLoading)
+    console.log('[AuthService] - New loading:', newState.isLoading)
+    
     this.authState = { ...newState }
-    this.listeners.forEach(listener => listener(this.authState))
+    
+    console.log('[AuthService] Notifying', this.listeners.length, 'listeners...')
+    this.listeners.forEach((listener, index) => {
+      try {
+        listener(this.authState)
+        console.log('[AuthService] Listener', index, 'notified successfully')
+      } catch (error) {
+        console.error('[AuthService] Error notifying listener', index, ':', error)
+      }
+    })
   }
 
   public onAuthStateChange(callback: (state: AuthState) => void) {
@@ -175,5 +217,29 @@ export class AuthService {
 
   public getAccessToken(): string | null {
     return this.authState.session?.access_token || null
+  }
+
+  public async setSessionFromTokens(accessToken: string, refreshToken: string) {
+    try {
+      console.log('[AuthService] Setting session from tokens...')
+      const { data, error } = await this.supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken
+      })
+
+      if (error) {
+        console.error('[AuthService] Error setting session:', error)
+        throw error
+      }
+
+      console.log('[AuthService] ✅ Session set successfully')
+      console.log('[AuthService] - User:', data.session?.user?.email)
+      console.log('[AuthService] - Expires at:', data.session?.expires_at)
+      
+      return { success: true, session: data.session }
+    } catch (error) {
+      console.error('[AuthService] setSessionFromTokens error:', error)
+      return { success: false, error: error.message }
+    }
   }
 }
