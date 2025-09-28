@@ -1,6 +1,13 @@
+@import url('https://fonts.googleapis.com/css2?family=Russo+One:wght@400&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+.logo-text {
+  font-family: 'Russo One', sans-serif;
+  letter-spacing: -0.5px;
+}
 
 /* Modified Glass Effect Base - More Transparent, No Morphism */
 .liquid-glass {

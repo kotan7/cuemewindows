@@ -1,5 +1,5 @@
 
-import { BrowserWindow, screen } from "electron"
+import { BrowserWindow, screen, session } from "electron"
 import { AppState } from "main"
 import path from "node:path"
 
@@ -72,6 +72,8 @@ export class WindowHelper {
     this.screenWidth = workArea.width
     this.screenHeight = workArea.height
 
+    // Create persistent session for authentication
+    const persistentSession = session.fromPartition('persist:cueme-auth')
     
     const windowSettings: Electron.BrowserWindowConstructorOptions = {
       width: 400,
@@ -81,7 +83,8 @@ export class WindowHelper {
       webPreferences: {
         nodeIntegration: true,
         contextIsolation: true,
-        preload: path.join(__dirname, "preload.js")
+        preload: path.join(__dirname, "preload.js"),
+        session: persistentSession // Use persistent session for auth data
       },
       show: false, // Start hidden, then show after setup
       alwaysOnTop: true,
