@@ -197,7 +197,7 @@ const SolutionCommands: React.FC<SolutionCommandsProps> = ({
 
           {/* Sign Out Button */}
           <button
-            className="text-red-500/70 hover:text-red-500/90 transition-colors hover:cursor-pointer"
+            className="text-white/70 hover:text-white/90 transition-colors hover:cursor-pointer"
             title="サインアウト"
             onClick={() => window.electronAPI.quitApp()}
           >

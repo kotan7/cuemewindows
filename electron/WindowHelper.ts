@@ -100,13 +100,13 @@ export class WindowHelper {
 
     this.mainWindow = new BrowserWindow(windowSettings)
     // this.mainWindow.webContents.openDevTools()
-    this.mainWindow.setContentProtection(true)
+    this.mainWindow.setContentProtection(false)
 
     if (process.platform === "darwin") {
       this.mainWindow.setVisibleOnAllWorkspaces(true, {
         visibleOnFullScreen: true
       })
-      this.mainWindow.setHiddenInMissionControl(true)
+      this.mainWindow.setHiddenInMissionControl(false)
       this.mainWindow.setAlwaysOnTop(true, "floating")
     }
     if (process.platform === "linux") {

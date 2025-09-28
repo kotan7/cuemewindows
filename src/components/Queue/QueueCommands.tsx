@@ -1084,7 +1084,7 @@ const QueueCommands = forwardRef<QueueCommandsRef, QueueCommandsProps>(
 
           {/* Sign Out Button - Moved to end */}
           <button
-            className="text-red-500/70 hover:text-red-500/90 transition-colors hover:cursor-pointer"
+            className="text-white/70 hover:text-white/90 transition-colors hover:cursor-pointer"
             title="サインアウト"
             onClick={() => window.electronAPI.quitApp()}
           >
