@@ -198,6 +198,7 @@ const Queue: React.FC<QueueProps> = ({ setView, onSignOut }) => {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isQuestionPanelOpen, setIsQuestionPanelOpen] = useState(true);
   const chatInputRef = useRef<HTMLInputElement>(null);
+  const chatMessagesRef = useRef<HTMLDivElement>(null);
 
   // Profile dropdown state
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
@@ -365,6 +366,13 @@ const Queue: React.FC<QueueProps> = ({ setView, onSignOut }) => {
       chatInputRef.current?.focus();
     }
   };
+
+  // Auto-scroll to bottom when new messages are added
+  useEffect(() => {
+    if (chatMessagesRef.current) {
+      chatMessagesRef.current.scrollTop = chatMessagesRef.current.scrollHeight;
+    }
+  }, [chatMessages, chatLoading]);
 
   useEffect(() => {
     const updateDimensions = () => {
@@ -775,7 +783,7 @@ const Queue: React.FC<QueueProps> = ({ setView, onSignOut }) => {
                   type="button"
                   title="プロフィール"
                 >
-                  <User className="w-4 h-4 text-emerald-600" />
+                  <User className="w-4 h-4 text-emerald-800" />
                 </button>
 
                 {/* Profile Dropdown Menu */}
@@ -928,7 +936,10 @@ const Queue: React.FC<QueueProps> = ({ setView, onSignOut }) => {
                     </span>
                   </div>
                 ) : (
-                  <div className="flex-1 overflow-y-auto mb-3">
+                  <div 
+                    ref={chatMessagesRef}
+                    className="flex-1 overflow-y-auto mb-3"
+                  >
                     {chatMessages.map((msg, idx) => (
                       <div
                         key={idx}
@@ -939,7 +950,7 @@ const Queue: React.FC<QueueProps> = ({ setView, onSignOut }) => {
                         <div
                           className={`max-w-[80%] px-3 py-1.5 rounded-xl text-xs border ${
                             msg.role === "user"
-                              ? "bg-gray-800/60 backdrop-blur-md text-gray-100 ml-12 border-gray-600/40"
+                              ? "bg-gray-800/60 backdrop-blur-md text-gray-100 ml-12 mr-8 border-gray-600/40"
                               : "morphism-dropdown text-white/90 mr-12"
                           }`}
                           style={{ wordBreak: "break-word", lineHeight: "1.4" }}
@@ -961,7 +972,7 @@ const Queue: React.FC<QueueProps> = ({ setView, onSignOut }) => {
                         <span className="animate-pulse animation-delay-400 text-white/40">
                           ●
                         </span>
-                        <span className="ml-2">Geminiが考え中...</span>
+                        <span className="ml-2">CueMeが考え中...</span>
                       </span>
                     </div>
                   </div>
