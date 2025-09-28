@@ -1,6 +1,6 @@
 {
   "name": "CueMe",
-  "version": "1.0.43",
+  "version": "1.0.44",
   "main": "./dist-electron/main.js",
   "scripts": {
     "clean": "rimraf dist dist-electron",
@@ -24,6 +24,12 @@
     "appId": "com.cueme.interview-assistant",
     "productName": "CueMe",
     "copyright": "Copyright © 2024 CueMe",
+    "protocols": [
+      {
+        "name": "cueme-protocol",
+        "schemes": ["cueme"]
+      }
+    ],
     "files": [
       "dist/**/*",
       "dist-electron/**/*",
