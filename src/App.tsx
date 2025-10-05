@@ -6,6 +6,7 @@ import Solutions from "./_pages/Solutions";
 import { QueryClient, QueryClientProvider } from "react-query";
 import { AuthDialog } from "./components/ui/auth-dialog";
 import { DevAuthDialog } from "./components/ui/dev-auth-dialog";
+import { PermissionDialog } from "./components/ui/permission-dialog";
 
 declare global {
   interface Window {
@@ -154,10 +155,23 @@ interface AuthState {
   isLoading: boolean;
 }
 
+interface PermissionState {
+  isFirstTime: boolean;
+  isLoading: boolean;
+  isCompleted: boolean;
+}
+
 const App: React.FC = () => {
   const [view, setView] = useState<"queue" | "solutions" | "debug">("queue");
   const containerRef = useRef<HTMLDivElement>(null);
   const [isDevAuthOpen, setIsDevAuthOpen] = useState(false);
+
+  // Permission state for first-time setup
+  const [permissionState, setPermissionState] = useState<PermissionState>({
+    isFirstTime: true,
+    isLoading: true,
+    isCompleted: false,
+  });
 
   // Authentication state
   const [authState, setAuthState] = useState<AuthState>({
@@ -166,7 +180,7 @@ const App: React.FC = () => {
     isLoading: true,
   });
 
-  // Initialize auth state
+  // Initialize auth state and permission state
   useEffect(() => {
     const initAuth = async () => {
       try {
@@ -178,7 +192,26 @@ const App: React.FC = () => {
       }
     };
 
+    const initPermissions = async () => {
+      try {
+        const result = await window.electronAPI.invoke('permission-check-first-time');
+        setPermissionState({
+          isFirstTime: result.isFirstTime,
+          isLoading: false,
+          isCompleted: !result.isFirstTime,
+        });
+      } catch (error) {
+        console.error("Error checking first time setup:", error);
+        setPermissionState({
+          isFirstTime: true,
+          isLoading: false,
+          isCompleted: false,
+        });
+      }
+    };
+
     initAuth();
+    initPermissions();
 
     // Listen for auth state changes
     const cleanup = window.electronAPI.onAuthStateChange((state) => {
@@ -300,6 +333,14 @@ const App: React.FC = () => {
     }
   };
 
+  // Handle permission setup completion
+  const handlePermissionsCompleted = () => {
+    setPermissionState(prev => ({
+      ...prev,
+      isCompleted: true,
+    }));
+  };
+
   useEffect(() => {
     const cleanupFunctions = [
       window.electronAPI.onSolutionStart(() => {
@@ -334,6 +375,52 @@ const App: React.FC = () => {
     ];
     return () => cleanupFunctions.forEach((cleanup) => cleanup());
   }, []);
+
+  // If permissions are loading, show loading
+  if (permissionState.isLoading) {
+    return (
+      <div
+        ref={containerRef}
+        className="w-full flex items-center justify-center"
+        style={{ width: "500px", height: "600px" }}
+      >
+        <QueryClientProvider client={queryClient}>
+          <ToastProvider>
+            <div className="text-center" style={{ color: "#013220" }}>
+              <div
+                className="animate-spin rounded-full h-8 w-8 border-b-2 mx-auto mb-2"
+                style={{ borderColor: "#013220" }}
+              ></div>
+              <p>アプリを初期化中...</p>
+            </div>
+            <ToastViewport />
+          </ToastProvider>
+        </QueryClientProvider>
+      </div>
+    );
+  }
+
+  // If first time setup and permissions not completed, show permission dialog
+  if (permissionState.isFirstTime && !permissionState.isCompleted) {
+    return (
+      <div
+        ref={containerRef}
+        className="w-full flex items-center justify-center"
+        style={{ width: "500px", height: "600px" }}
+      >
+        <QueryClientProvider client={queryClient}>
+          <ToastProvider>
+            <PermissionDialog
+              isOpen={true}
+              onOpenChange={() => {}} // Prevent closing until completed
+              onPermissionsCompleted={handlePermissionsCompleted}
+            />
+            <ToastViewport />
+          </ToastProvider>
+        </QueryClientProvider>
+      </div>
+    );
+  }
 
   // If user is not authenticated, show auth dialog
   if (!authState.user && !authState.isLoading) {

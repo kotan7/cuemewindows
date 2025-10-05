@@ -1,6 +1,6 @@
 // ipcHandlers.ts
 
-import { ipcMain, app, shell } from "electron"
+import { ipcMain, app, shell, systemPreferences } from "electron"
 import path from "path"
 import { AppState } from "./main"
 
@@ -723,6 +723,66 @@ export function initializeIpcHandlers(appState: AppState): void {
     } catch (error: any) {
       console.error("Error checking system audio support:", error);
       return { supported: false };
+    }
+  });
+
+  // Permission Management handlers
+  ipcMain.handle("permission-check-first-time", async () => {
+    try {
+      const isFirstTime = await appState.permissionStorage.isFirstTimeSetup();
+      return { isFirstTime };
+    } catch (error: any) {
+      console.error("Error checking first time setup:", error);
+      return { isFirstTime: true }; // Default to first time if error
+    }
+  });
+
+  ipcMain.handle("permission-check-status", async () => {
+    try {
+      const status = await appState.permissionStorage.getCurrentPermissionStatus();
+      return status;
+    } catch (error: any) {
+      console.error("Error checking permission status:", error);
+      return {
+        microphone: 'unknown',
+        screenCapture: 'unknown'
+      };
+    }
+  });
+
+  ipcMain.handle("permission-request-microphone", async () => {
+    try {
+      const granted = await appState.permissionStorage.requestMicrophonePermission();
+      return { granted };
+    } catch (error: any) {
+      console.error("Error requesting microphone permission:", error);
+      return { granted: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle("permission-open-system-preferences", async () => {
+    try {
+      if (process.platform === 'darwin') {
+        // Open Security & Privacy preferences
+        await shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy');
+      } else if (process.platform === 'win32') {
+        // Open Windows Privacy settings
+        await shell.openExternal('ms-settings:privacy-microphone');
+      }
+      return { success: true };
+    } catch (error: any) {
+      console.error("Error opening system preferences:", error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle("permission-mark-setup-completed", async () => {
+    try {
+      const success = await appState.permissionStorage.markInitialSetupCompleted();
+      return { success };
+    } catch (error: any) {
+      console.error("Error marking setup completed:", error);
+      return { success: false, error: error.message };
     }
   });
 }

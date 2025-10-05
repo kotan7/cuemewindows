@@ -44,6 +44,7 @@ import { QnAService } from "./QnAService"
 import { DocumentService } from "./DocumentService"
 import { UsageTracker } from "./UsageTracker"
 import { AudioStreamProcessor } from "./AudioStreamProcessor"
+import { PermissionStorage } from "./PermissionStorage"
 
 export class AppState {
   private static instance: AppState | null = null
@@ -57,6 +58,7 @@ export class AppState {
   public documentService: DocumentService
   public usageTracker: UsageTracker
   public audioStreamProcessor: AudioStreamProcessor
+  public permissionStorage: PermissionStorage
   private tray: Tray | null = null
 
   // View management
@@ -105,6 +107,9 @@ export class AppState {
 
     // Initialize UsageTracker (MUST be before auth listener setup)
     this.usageTracker = new UsageTracker()
+
+    // Initialize PermissionStorage
+    this.permissionStorage = new PermissionStorage()
 
     // Setup auth callback server
     this.setupAuthCallbackServer()

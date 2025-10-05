@@ -1,7 +1,7 @@
-import { safeStorage } from 'electron'
 import * as fs from 'fs'
 import * as path from 'path'
 import { app } from 'electron'
+import * as crypto from 'crypto'
 
 export interface StoredTokens {
   refreshToken: string
@@ -11,28 +11,23 @@ export interface StoredTokens {
 
 export class TokenStorage {
   private readonly tokenFilePath: string
-  private readonly encryptionKey = 'cueme-auth-tokens'
+  private readonly encryptionKey = 'cueme-auth-tokens-key-v2'
 
   constructor() {
     // Store tokens in app's user data directory
     const userDataPath = app.getPath('userData')
-    this.tokenFilePath = path.join(userDataPath, 'auth-tokens.dat')
+    this.tokenFilePath = path.join(userDataPath, 'auth-tokens.json')
   }
 
   /**
-   * Securely store refresh token using Electron's safeStorage
+   * Store refresh token using simple file encryption
    */
   public async storeTokens(tokens: StoredTokens): Promise<boolean> {
     try {
       console.log('[TokenStorage] Storing tokens securely...')
       
-      if (!safeStorage.isEncryptionAvailable()) {
-        console.error('[TokenStorage] Encryption not available on this system')
-        return false
-      }
-
       const tokenData = JSON.stringify(tokens)
-      const encryptedData = safeStorage.encryptString(tokenData)
+      const encryptedData = this.encrypt(tokenData)
       
       // Ensure directory exists
       const dir = path.dirname(this.tokenFilePath)
@@ -61,13 +56,8 @@ export class TokenStorage {
         return null
       }
 
-      if (!safeStorage.isEncryptionAvailable()) {
-        console.error('[TokenStorage] Encryption not available for decryption')
-        return null
-      }
-
-      const encryptedData = fs.readFileSync(this.tokenFilePath)
-      const decryptedData = safeStorage.decryptString(encryptedData)
+      const encryptedData = fs.readFileSync(this.tokenFilePath, 'utf8')
+      const decryptedData = this.decrypt(encryptedData)
       const tokens: StoredTokens = JSON.parse(decryptedData)
       
       console.log('[TokenStorage] ✅ Tokens retrieved successfully')
@@ -116,5 +106,44 @@ export class TokenStorage {
     }
 
     return true
+  }
+
+  /**
+   * Simple encryption using AES-256-GCM
+   */
+  private encrypt(text: string): string {
+    const algorithm = 'aes-256-gcm'
+    const key = crypto.scryptSync(this.encryptionKey, 'salt', 32)
+    const iv = crypto.randomBytes(16)
+    const cipher = crypto.createCipheriv(algorithm, key, iv)
+    
+    let encrypted = cipher.update(text, 'utf8', 'hex')
+    encrypted += cipher.final('hex')
+    
+    const authTag = cipher.getAuthTag()
+    
+    return JSON.stringify({
+      encrypted,
+      iv: iv.toString('hex'),
+      authTag: authTag.toString('hex')
+    })
+  }
+
+  /**
+   * Simple decryption using AES-256-GCM
+   */
+  private decrypt(encryptedData: string): string {
+    const algorithm = 'aes-256-gcm'
+    const key = crypto.scryptSync(this.encryptionKey, 'salt', 32)
+    
+    const { encrypted, iv, authTag } = JSON.parse(encryptedData)
+    
+    const decipher = crypto.createDecipheriv(algorithm, key, Buffer.from(iv, 'hex'))
+    decipher.setAuthTag(Buffer.from(authTag, 'hex'))
+    
+    let decrypted = decipher.update(encrypted, 'hex', 'utf8')
+    decrypted += decipher.final('utf8')
+    
+    return decrypted
   }
 }
