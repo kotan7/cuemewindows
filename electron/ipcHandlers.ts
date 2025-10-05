@@ -760,14 +760,29 @@ export function initializeIpcHandlers(appState: AppState): void {
     }
   });
 
-  ipcMain.handle("permission-open-system-preferences", async () => {
+  ipcMain.handle("permission-open-system-preferences", async (event, permissionType?: string) => {
     try {
       if (process.platform === 'darwin') {
-        // Open Security & Privacy preferences
-        await shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy');
+        let url = 'x-apple.systempreferences:com.apple.preference.security?Privacy';
+        
+        // Open specific privacy settings based on permission type
+        if (permissionType === 'microphone') {
+          url = 'x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone';
+        } else if (permissionType === 'screen') {
+          url = 'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture';
+        }
+        
+        console.log('[IPC] Opening macOS system preferences:', url);
+        await shell.openExternal(url);
       } else if (process.platform === 'win32') {
-        // Open Windows Privacy settings
-        await shell.openExternal('ms-settings:privacy-microphone');
+        // Open Windows Privacy settings based on permission type
+        let url = 'ms-settings:privacy-microphone';
+        if (permissionType === 'screen') {
+          url = 'ms-settings:privacy-screencapture';
+        }
+        
+        console.log('[IPC] Opening Windows privacy settings:', url);
+        await shell.openExternal(url);
       }
       return { success: true };
     } catch (error: any) {

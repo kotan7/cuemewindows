@@ -34,9 +34,9 @@ interface ToastProps
 }
 
 const toastVariants: Record<ToastVariant, string> = {
-  neutral: "bg-yellow-500 text-white",
-  success: "bg-green-500 text-white",
-  error: "bg-red-500 text-white"
+  neutral: "liquid-glass p-4 text-white/90 bg-black/60 border border-white/20",
+  success: "liquid-glass p-4 text-white/90 bg-green-900/40 border border-green-500/30",
+  error: "liquid-glass p-4 text-white/90 bg-red-900/40 border border-red-500/30"
 }
 
 const Toast = React.forwardRef<
@@ -46,7 +46,7 @@ const Toast = React.forwardRef<
   <ToastPrimitive.Root
     ref={ref}
     className={cn(
-      "group fixed top-4 left-4 z-50 w-auto max-w-sm px-4 py-2 rounded-lg animate-in fade-in slide-in-from-bottom",
+      "group w-auto max-w-sm rounded-lg animate-in fade-in slide-in-from-bottom text-xs relative",
       toastVariants[variant],
       className
     )}
@@ -90,7 +90,7 @@ const ToastTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <ToastPrimitive.Title
     ref={ref}
-    className={cn("font-semibold text-sm", className)}
+    className={cn("font-semibold text-sm text-white/90", className)}
     {...props}
   />
 ))
@@ -102,7 +102,7 @@ const ToastDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <ToastPrimitive.Description
     ref={ref}
-    className={cn("text-xs opacity-90", className)}
+    className={cn("text-xs opacity-80 text-white/80", className)}
     {...props}
   />
 ))

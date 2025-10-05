@@ -15,6 +15,7 @@ import {
   Phone,
   Wrench,
   MessageSquare,
+  Shield,
 } from "lucide-react";
 import ScreenshotQueue from "../components/Queue/ScreenshotQueue";
 import {
@@ -504,6 +505,83 @@ const Queue: React.FC<QueueProps> = ({ setView, onSignOut }) => {
     setIsProfileDropdownOpen(false);
   };
 
+  // Permission request handler
+  const handlePermissionRequest = async () => {
+    try {
+      console.log('[Queue] Opening permission request dialog...');
+      
+      // Check current permission status first
+      const status = await window.electronAPI.invoke('permission-check-status');
+      console.log('[Queue] Current permission status:', status);
+      
+      let hasRequestedAny = false;
+      
+      // Handle microphone permission
+      if (status.microphone !== 'granted') {
+        console.log('[Queue] Microphone permission not granted, requesting...');
+        hasRequestedAny = true;
+        
+        try {
+          // First try to request programmatically
+          const micResult = await window.electronAPI.invoke('permission-request-microphone');
+          if (micResult.granted) {
+            showToast("権限許可", "マイクの権限が許可されました", "success");
+          } else {
+            // If denied, open system preferences for microphone
+            console.log('[Queue] Microphone permission denied, opening system preferences...');
+            await window.electronAPI.invoke('permission-open-system-preferences', 'microphone');
+            showToast(
+              "マイクの設定", 
+              "システム環境設定が開きました。セキュリティとプライバシー → マイクでCueMeを有効にしてください。", 
+              "neutral"
+            );
+          }
+        } catch (error) {
+          console.error('[Queue] Error requesting microphone permission:', error);
+          // Fallback to opening system preferences
+          await window.electronAPI.invoke('permission-open-system-preferences', 'microphone');
+          showToast(
+            "マイクの設定", 
+            "システム環境設定が開きました。セキュリティとプライバシー → マイクでCueMeを有効にしてください。", 
+            "neutral"
+          );
+        }
+      }
+      
+      // Handle screen recording permission (cannot be requested programmatically)
+      if (status.screenCapture !== 'granted') {
+        console.log('[Queue] Screen recording permission not granted, opening system preferences...');
+        hasRequestedAny = true;
+        
+        await window.electronAPI.invoke('permission-open-system-preferences', 'screen');
+        showToast(
+          "画面収録の設定", 
+          "システム環境設定が開きました。セキュリティとプライバシー → 画面収録でCueMeを有効にしてください。", 
+          "neutral"
+        );
+      }
+      
+      // If both permissions are already granted
+      if (status.microphone === 'granted' && status.screenCapture === 'granted') {
+        showToast("権限確認", "すべての権限が許可されています。", "success");
+      } else if (hasRequestedAny) {
+        // Show additional guidance for users
+        setTimeout(() => {
+          showToast(
+            "再起動のお知らせ", 
+            "権限を変更した後は、アプリを再起動することをお勧めします。", 
+            "neutral"
+          );
+        }, 3000);
+      }
+      
+    } catch (error) {
+      console.error('[Queue] Error requesting permissions:', error);
+      showToast("エラー", "権限の確認に失敗しました", "error");
+    }
+    setIsProfileDropdownOpen(false);
+  };
+
   const handleResponseModeChange = (mode: ResponseMode) => {
     setResponseMode(mode);
   };
@@ -743,19 +821,6 @@ const Queue: React.FC<QueueProps> = ({ setView, onSignOut }) => {
       <div className="bg-transparent w-full">
         {/* Center everything in a flex container */}
         <div className="flex flex-col items-center w-full">
-          {/* Toast positioned at the top */}
-          <div className="w-full px-2 py-1">
-            <Toast
-              open={toastOpen}
-              onOpenChange={setToastOpen}
-              variant={toastMessage.variant}
-              duration={3000}
-            >
-              <ToastTitle>{toastMessage.title}</ToastTitle>
-              <ToastDescription>{toastMessage.description}</ToastDescription>
-            </Toast>
-          </div>
-
           {/* Main Bar with Logout Button - Centered */}
           <div className="w-fit overflow-visible relative">
             <div className="flex items-center gap-2">
@@ -816,6 +881,13 @@ const Queue: React.FC<QueueProps> = ({ setView, onSignOut }) => {
                       </div>
 
                       <button
+                        onClick={handlePermissionRequest}
+                        className="w-full px-3 py-2 text-left text-xs text-white/80 hover:text-white hover:bg-white/10 flex items-center gap-2 transition-colors rounded-md"
+                      >
+                        <Shield className="w-3 h-3" />
+                        権限を許可
+                      </button>
+                      <button
                         onClick={handleSettings}
                         className="w-full px-3 py-2 text-left text-xs text-white/80 hover:text-white hover:bg-white/10 flex items-center gap-2 transition-colors rounded-md"
                       >
@@ -835,6 +907,21 @@ const Queue: React.FC<QueueProps> = ({ setView, onSignOut }) => {
               </div>
             </div>
           </div>
+
+          {/* Permission and general toasts - positioned below the floating bar */}
+          {toastOpen && (
+            <div className="mt-2 w-full max-w-md">
+              <Toast
+                open={toastOpen}
+                onOpenChange={setToastOpen}
+                variant={toastMessage.variant}
+                duration={3000}
+              >
+                <ToastTitle>{toastMessage.title}</ToastTitle>
+                <ToastDescription>{toastMessage.description}</ToastDescription>
+              </Toast>
+            </div>
+          )}
 
           {/* Usage Limit Notification - Centered below the bar */}
           {showUsageLimitToast && (
