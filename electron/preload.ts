@@ -72,6 +72,7 @@ interface ElectronAPI {
   authResetPassword: (email: string) => Promise<{ success: boolean; error?: string }>
   onAuthStateChange: (callback: (state: { user: any | null; session: any | null; isLoading: boolean }) => void) => () => void
   onChatToggle: (callback: () => void) => () => void
+  onDevAuthOpen: (callback: () => void) => () => void
 }
 
 export const PROCESSING_EVENTS = {
@@ -274,6 +275,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("toggle-chat", subscription)
     return () => {
       ipcRenderer.removeListener("toggle-chat", subscription)
+    }
+  },
+  onDevAuthOpen: (callback: () => void) => {
+    const subscription = () => callback()
+    ipcRenderer.on("open-dev-auth", subscription)
+    return () => {
+      ipcRenderer.removeListener("open-dev-auth", subscription)
     }
   }
 } as ElectronAPI)

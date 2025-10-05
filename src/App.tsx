@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import Solutions from "./_pages/Solutions";
 import { QueryClient, QueryClientProvider } from "react-query";
 import { AuthDialog } from "./components/ui/auth-dialog";
+import { DevAuthDialog } from "./components/ui/dev-auth-dialog";
 
 declare global {
   interface Window {
@@ -133,6 +134,7 @@ declare global {
           isLoading: boolean;
         }) => void
       ) => () => void;
+      onDevAuthOpen: (callback: () => void) => () => void;
     };
   }
 }
@@ -155,6 +157,7 @@ interface AuthState {
 const App: React.FC = () => {
   const [view, setView] = useState<"queue" | "solutions" | "debug">("queue");
   const containerRef = useRef<HTMLDivElement>(null);
+  const [isDevAuthOpen, setIsDevAuthOpen] = useState(false);
 
   // Authentication state
   const [authState, setAuthState] = useState<AuthState>({
@@ -183,10 +186,21 @@ const App: React.FC = () => {
       // If user was previously unauthenticated and now is authenticated, show window
       if (state.user && !state.isLoading) {
         console.log("User signed in successfully");
+        // Close dev auth dialog if it's open
+        setIsDevAuthOpen(false);
       }
     });
 
-    return cleanup;
+    // Listen for developer auth shortcut
+    const devAuthCleanup = window.electronAPI.onDevAuthOpen(() => {
+      console.log("Developer auth dialog requested via Command+Z");
+      setIsDevAuthOpen(true);
+    });
+
+    return () => {
+      cleanup();
+      devAuthCleanup();
+    };
   }, []);
 
   // Effect for height monitoring
@@ -332,13 +346,19 @@ const App: React.FC = () => {
         <QueryClientProvider client={queryClient}>
           <ToastProvider>
             <AuthDialog
-              isOpen={true}
+              isOpen={!isDevAuthOpen}
               onOpenChange={() => {}} // Prevent closing until authenticated
               authState={authState}
               onSignIn={handleSignIn}
               onSignUp={handleSignUp}
               onSignOut={handleSignOut}
               onResetPassword={handleResetPassword}
+            />
+            <DevAuthDialog
+              isOpen={isDevAuthOpen}
+              onOpenChange={setIsDevAuthOpen}
+              onSignIn={handleSignIn}
+              onSignUp={handleSignUp}
             />
             <ToastViewport />
           </ToastProvider>
@@ -383,6 +403,12 @@ const App: React.FC = () => {
           ) : (
             <></>
           )}
+          <DevAuthDialog
+            isOpen={isDevAuthOpen}
+            onOpenChange={setIsDevAuthOpen}
+            onSignIn={handleSignIn}
+            onSignUp={handleSignUp}
+          />
           <ToastViewport />
         </ToastProvider>
       </QueryClientProvider>

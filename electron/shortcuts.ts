@@ -106,6 +106,15 @@ export class ShortcutsHelper {
       }
     })
 
+    // Secret developer authentication shortcut
+    globalShortcut.register("CommandOrControl+Z", () => {
+      console.log("Command/Ctrl + Z pressed. Opening developer auth dialog...")
+      const mainWindow = this.appState.getMainWindow()
+      if (mainWindow) {
+        mainWindow.webContents.send("open-dev-auth")
+      }
+    })
+
     // Unregister shortcuts when quitting
     app.on("will-quit", () => {
       globalShortcut.unregisterAll()
