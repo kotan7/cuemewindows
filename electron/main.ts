@@ -1066,6 +1066,29 @@ export function handleDeepLink(appState: AppState, url: string, testMode: boolea
   console.log('[DeepLink] ==============================')
 }
 
+/**
+ * Request microphone access on app startup
+ */
+async function requestMicAccess(appState: AppState): Promise<void> {
+  if (process.platform !== 'darwin') {
+    console.log('[Permission] Microphone permission request only available on macOS')
+    return
+  }
+  
+  try {
+    console.log('[Permission] Requesting microphone permission...')
+    const granted = await appState.permissionStorage.requestMicrophonePermission()
+    
+    if (granted) {
+      console.log('[Permission] ✅ Microphone access granted')
+    } else {
+      console.log('[Permission] ❌ Microphone access denied')
+    }
+  } catch (error) {
+    console.error('[Permission] Error requesting microphone permission:', error)
+  }
+}
+
 // Application initialization
 async function initializeApp() {
   console.log('[App Init] ==============================')
@@ -1094,7 +1117,7 @@ async function initializeApp() {
   console.log('[App Init] Setting up deep link protocol handling...')
   setupDeepLinkHandling(appState)
 
-  app.whenReady().then(() => {
+  app.whenReady().then(async () => {
     console.log('[App Init] ✅ Electron app is ready!')
     console.log('[App Init] Creating main window...')
     appState.createWindow()
@@ -1105,6 +1128,10 @@ async function initializeApp() {
     // Register global shortcuts using ShortcutsHelper
     console.log('[App Init] Registering global shortcuts...')
     appState.shortcutsHelper.registerGlobalShortcuts()
+    
+    // Request microphone permission on startup
+    console.log('[App Init] Requesting microphone permission...')
+    await requestMicAccess(appState)
     
     console.log('[App Init] ✅ App initialization completed successfully!')
   })
