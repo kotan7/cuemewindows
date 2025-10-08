@@ -1,11 +1,9 @@
 import { EventEmitter } from "events";
 import { v4 as uuidv4 } from "uuid";
-import OpenAI from "openai";
-import * as fs from "fs";
-import * as path from "path";
-import * as os from "os";
-import { QuestionDetector } from "./QuestionDetector";
 import { SystemAudioCapture, AudioSource } from "./SystemAudioCapture";
+import { AudioTranscriber } from "./audio/AudioTranscriber";
+import { QuestionRefiner } from "./audio/QuestionRefiner";
+import { StreamingQuestionDetector } from "./audio/StreamingQuestionDetector";
 import {
   AudioChunk,
   AudioStreamState,
@@ -18,9 +16,10 @@ import {
 export class AudioStreamProcessor extends EventEmitter {
   private state: AudioStreamState;
   private config: AudioStreamConfig;
-  private questionDetector: QuestionDetector;
-  private openai: OpenAI;
   private systemAudioCapture: SystemAudioCapture;
+  private audioTranscriber: AudioTranscriber;
+  private questionRefiner: QuestionRefiner;
+  private streamingDetector: StreamingQuestionDetector;
   
   // Audio processing
   private currentAudioData: Float32Array[] = [];
@@ -29,31 +28,6 @@ export class AudioStreamProcessor extends EventEmitter {
   private tempBuffer: Float32Array | null = null;
   private lastChunkTime: number = 0;
   private accumulatedSamples: number = 0;
-  
-  // NEW: Question activity tracking for ultra-fast detection
-  private recentAudioBuffer: string[] = []; // Store recent audio patterns
-  private lastQuestionHintTime: number = 0;
-  
-  // NEW: Streaming detection state
-  private streamingBuffer: string = ''; // Accumulate partial transcriptions
-  private lastStreamingCheck: number = 0;
-
-  // Japanese filler words and patterns to remove
-  private readonly fillerWords = new Set([
-    'えー', 'あー', 'うー', 'んー', 'そのー', 'あのー', 'えーっと', 'あーと',
-    'まあ', 'なんか', 'ちょっと', 'やっぱり', 'やっぱ', 'だから', 'でも',
-    'うん', 'はい', 'そう', 'ですね', 'ですが', 'ただ', 'まず', 'それで',
-    'というか', 'てか', 'なので', 'けど', 'けれど', 'しかし', 'でも',
-    'ー', '〜', 'う〜ん', 'え〜', 'あ〜', 'そ〜', 'ん〜',
-    // Additional fillers
-    'じゃあ', 'では', 'それでは', 'さて', 'ちなみに', 'ところで', 'えっと', 'えと',
-    'あの', 'その', 'とりあえず', 'まぁ', 'まぁその', 'なんていうか'
-  ]);
-
-  private readonly questionStarters = new Set([
-    'どう', 'どの', 'どこ', 'いつ', 'なぜ', 'なん', '何', 'だれ', '誰',
-    'どちら', 'どれ', 'いくら', 'いくつ', 'どのよう', 'どんな'
-  ]);
 
   constructor(openaiApiKey: string, config?: Partial<AudioStreamConfig>) {
     super();
@@ -63,8 +37,10 @@ export class AudioStreamProcessor extends EventEmitter {
       throw new Error('OpenAI API key is required for AudioStreamProcessor');
     }
     
-    this.openai = new OpenAI({ apiKey: openaiApiKey });
-    this.questionDetector = new QuestionDetector();
+    // Initialize modules
+    this.audioTranscriber = new AudioTranscriber(openaiApiKey, config?.sampleRate || 16000);
+    this.questionRefiner = new QuestionRefiner();
+    this.streamingDetector = new StreamingQuestionDetector();
     
     // Simplified configuration - removed batching
     this.config = {
@@ -102,7 +78,7 @@ export class AudioStreamProcessor extends EventEmitter {
     // Setup system audio capture event listeners
     this.setupSystemAudioEvents();
 
-    console.log('[AudioStreamProcessor] Initialized with immediate question refinement and system audio support');
+    console.log('[AudioStreamProcessor] Initialized with modular architecture');
   }
 
   /**
@@ -290,8 +266,8 @@ export class AudioStreamProcessor extends EventEmitter {
     const shouldCreateByTime = timeSinceLastChunk >= 4000; // 4s instead of 10s
     const shouldCreateByWords = this.wordCount >= this.config.maxWords;
     
-    // NEW: Quick heuristic check for question-like audio patterns
-    const shouldCreateByQuestionHint = this.hasRecentQuestionActivity();
+    // Use streaming detector for question hint
+    const shouldCreateByQuestionHint = this.streamingDetector.hasRecentQuestionActivity();
     
     const shouldCreate = shouldCreateByDuration || shouldCreateByTime || shouldCreateByWords || shouldCreateByQuestionHint;
     
@@ -356,60 +332,25 @@ export class AudioStreamProcessor extends EventEmitter {
     }
 
     try {
-      console.log('[AudioStreamProcessor] Starting transcription for chunk:', {
-        id: chunk.id,
-        duration: chunk.duration,
-        dataLength: chunk.data.length,
-        timestamp: chunk.timestamp
-      });
-      
       this.state.isProcessing = true;
       this.emit('state-changed', { ...this.state });
 
-      // Convert to PCM buffer for Whisper API
-      const pcmBuffer = Buffer.alloc(chunk.data.length * 2);
-      for (let i = 0; i < chunk.data.length; i++) {
-        const sample = Math.max(-1, Math.min(1, chunk.data[i]));
-        const value = Math.floor(sample < 0 ? sample * 32768 : sample * 32767);
-        pcmBuffer.writeInt16LE(value, i * 2);
-      }
-      
-      console.log('[AudioStreamProcessor] Created PCM buffer, size:', pcmBuffer.length);
-      const tempFilePath = await this.createTempAudioFile(pcmBuffer);
-      console.log('[AudioStreamProcessor] Created WAV file:', tempFilePath);
-      
-      const transcription = await this.openai.audio.transcriptions.create({
-        file: fs.createReadStream(tempFilePath),
-        model: "whisper-1",
-        language: "ja",
-        response_format: "json",
-        temperature: 0.2
-      });
-      
-      console.log('[AudioStreamProcessor] Whisper transcription result:', {
-        text: transcription.text,
-        textLength: transcription.text?.length || 0
-      });
-
-      // Clean up temp file
-      await this.cleanupTempFile(tempFilePath);
-
-      const result: TranscriptionResult = {
-        id: uuidv4(),
-        text: transcription.text || "",
-        timestamp: chunk.timestamp,
-        confidence: 1.0,
-        isQuestion: false,
-        originalChunkId: chunk.id
-      };
+      // Use AudioTranscriber module
+      const result = await this.audioTranscriber.transcribe(chunk);
 
       this.emit('transcription-completed', result);
 
-      // NEW: Update recent audio buffer for question hint detection
-      this.updateRecentAudioBuffer(result.text);
+      // Update streaming detector
+      this.streamingDetector.updateRecentAudioBuffer(result.text);
 
-      // NEW: Streaming question detection - check immediately on each transcription
-      this.performStreamingQuestionDetection(result.text);
+      // Check for streaming question detection
+      const hasStreamingQuestion = this.streamingDetector.checkForStreamingQuestion(result.text);
+      if (hasStreamingQuestion && this.currentAudioData.length > 0) {
+        console.log('[AudioStreamProcessor] Triggering immediate chunk processing due to streaming question detection');
+        this.createAndProcessChunk().catch(error => {
+          console.error('[AudioStreamProcessor] Error in streaming-triggered chunk processing:', error);
+        });
+      }
 
       // Detect and immediately refine questions
       if (result.text.trim()) {
@@ -433,71 +374,18 @@ export class AudioStreamProcessor extends EventEmitter {
    */
   private async detectAndRefineQuestions(transcription: TranscriptionResult): Promise<void> {
     try {
-      console.log(`[AudioStreamProcessor] Detecting questions in: "${transcription.text}"`);
-      
-      // ULTRA OPTIMIZATION: Skip empty or very short transcriptions
-      if (!transcription.text || transcription.text.trim().length < 3) {
-        console.log('[AudioStreamProcessor] Skipping question detection - text too short');
-        return;
-      }
-
-      const detectedQuestion = this.questionDetector.detectQuestion(transcription);
-
-      // Use either detector output or fall back to full transcription for heuristics
-      const baseText = detectedQuestion ? detectedQuestion.text : transcription.text;
-
-      // Split possible multiple questions, trim preface, and refine each
-      const questionParts = this.splitIntoQuestions(baseText);
-
-      if (questionParts.length === 0) {
-        console.log('[AudioStreamProcessor] No questions detected');
-        return;
-      }
-
-      console.log(`[AudioStreamProcessor] Found ${questionParts.length} potential questions:`, questionParts);
-
-      // Process each question part with PARALLEL processing for speed
-      const questionPromises = questionParts.map(async (part) => {
-        const core = this.trimPreface(part);
-        if (!core || core.trim().length < 2) return null;
-
-        const tempQuestion: DetectedQuestion = {
-          id: uuidv4(),
-          text: core.trim(),
-          timestamp: detectedQuestion ? detectedQuestion.timestamp : transcription.timestamp,
-          confidence: detectedQuestion ? detectedQuestion.confidence : transcription.confidence
-        };
-
-        // Validate by either the detector's rules or our heuristic recognizer
-        if (!this.questionDetector.isValidQuestion(tempQuestion) && !this.looksLikeQuestion(core)) {
-          return null;
-        }
-
-        const refinedText = this.refineQuestionAlgorithmically(core);
-
-        const refinedQuestion: DetectedQuestion & { refinedText?: string } = {
-          ...tempQuestion,
-          refinedText
-        };
-
-        console.log(`[AudioStreamProcessor] ULTRA-FAST Question detected: "${refinedText}"`);
-        return refinedQuestion;
-      });
-
-      // Wait for all parallel processing to complete
-      const allQuestions = (await Promise.all(questionPromises)).filter(q => q !== null);
+      // Use QuestionRefiner module
+      const refinedQuestions = await this.questionRefiner.detectAndRefineQuestions(transcription);
       
       // Add valid questions to state and emit immediately
-      for (const question of allQuestions) {
-        if (question) {
-          this.state.questionBuffer.push(question);
-          this.emit('question-detected', question);
-          console.log(`[AudioStreamProcessor] ULTRA-FAST Question emitted: "${question.text}"`);
-        }
+      for (const question of refinedQuestions) {
+        this.state.questionBuffer.push(question);
+        this.emit('question-detected', question);
+        console.log(`[AudioStreamProcessor] Question emitted: "${question.text}"`);
       }
 
       // Emit state change if we added any questions
-      if (allQuestions.length > 0) {
+      if (refinedQuestions.length > 0) {
         this.emit('state-changed', { ...this.state });
       }
       
@@ -505,161 +393,6 @@ export class AudioStreamProcessor extends EventEmitter {
       console.error('[AudioStreamProcessor] Question detection error:', error);
       this.emit('error', error as Error);
     }
-  }
-
-  /**
-   * Algorithmically refine question text by removing fillers and cleaning up
-   */
-  private refineQuestionAlgorithmically(text: string): string {
-    console.log('[AudioStreamProcessor] Starting algorithmic refinement for:', text);
-    
-    try {
-      let refined = text.toLowerCase().trim();
-      
-      // Step 1: Remove common Japanese filler words
-      const words = refined.split(/[\s、。！？]+/).filter(word => word.length > 0);
-      const cleanedWords = words.filter(word => !this.fillerWords.has(word));
-      
-      // Step 2: Remove repetitive patterns (like "あのあの", "えーえー")
-      const deduplicatedWords: string[] = [];
-      let lastWord = '';
-      for (const word of cleanedWords) {
-        if (word !== lastWord || !this.fillerWords.has(word)) {
-          deduplicatedWords.push(word);
-        }
-        lastWord = word;
-      }
-      
-      // Step 3: Rejoin and clean up spacing
-      refined = deduplicatedWords.join(' ');
-      
-      // Step 4: Remove multiple spaces and normalize
-      refined = refined.replace(/\s+/g, ' ').trim();
-      
-      // Step 5: Remove trailing particles that don't add meaning to questions
-      refined = refined.replace(/[、。！？\s]*$/, '');
-      refined = refined.replace(/\s*(です|ます|だ|である|でしょう|かな|よね)?\s*$/i, '');
-      
-      // Step 6: Ensure question ends appropriately
-      if (!refined.endsWith('？') && !refined.endsWith('?')) {
-        // Check if it's actually a question by looking for question words
-        const hasQuestionWord = Array.from(this.questionStarters).some(starter => 
-          refined.includes(starter)
-        );
-        
-        if (hasQuestionWord || this.looksLikeQuestion(refined)) {
-          refined += '？';
-        }
-      }
-      
-      // Step 7: Capitalize first character if it's a Latin character
-      if (refined.length > 0 && /[a-zA-Z]/.test(refined[0])) {
-        refined = refined[0].toUpperCase() + refined.slice(1);
-      }
-      
-      // Fallback: if we cleaned too much, return original
-      if (refined.length < 3 || refined.replace(/[？?]/g, '').trim().length < 2) {
-        console.log('[AudioStreamProcessor] Refinement too aggressive, using original');
-        return text;
-      }
-      
-      console.log('[AudioStreamProcessor] Algorithmic refinement complete:', {
-        original: text,
-        refined: refined,
-        removedWords: words.length - cleanedWords.length
-      });
-      
-      return refined;
-      
-    } catch (error) {
-      console.error('[AudioStreamProcessor] Error in algorithmic refinement:', error);
-      return text; // Return original on error
-    }
-  }
-
-  /**
-   * Check if text structure looks like a question
-   */
-  private looksLikeQuestion(text: string): boolean {
-    // Check for interrogative patterns in Japanese
-    const questionPatterns = [
-      /どう.*/, /どの.*/, /どこ.*/, /いつ.*/, /なぜ.*/, /なん.*/, /何.*/, 
-      /だれ.*/, /誰.*/, /どちら.*/, /どれ.*/, /いくら.*/, /いくつ.*/,
-      /.*ですか/, /.*ますか/, /.*でしょうか/, /.*かしら/, /.*のか/,
-      // Polite request endings that imply a question/request
-      /.*(教えてください|お聞かせください|お願いします|お願いできますか|お願いしてもいいですか|いただけますか|頂けますか|いただけませんか|てもらえますか|てくれますか|てください)[。?？]?$/
-    ];
-    
-    return questionPatterns.some(pattern => pattern.test(text));
-  }
-
-  /**
-   * Split a transcription into individual question-like parts.
-   */
-  private splitIntoQuestions(text: string): string[] {
-    if (!text) return [];
-
-    // First, split by strong sentence delimiters
-    let parts = text
-      .split(/[\n]+|[！？!。]/)
-      .map(p => p.trim())
-      .filter(p => p.length > 0);
-
-    // Further split by question marks while keeping content
-    const refinedParts: string[] = [];
-    for (const part of parts) {
-      const qmSplit = part.split(/[？?]/).map(p => p.trim()).filter(Boolean);
-      if (qmSplit.length > 1) {
-        refinedParts.push(...qmSplit);
-      } else {
-        refinedParts.push(part);
-      }
-    }
-
-    // If still long and contains connectors suggesting multiple items, split on them
-    const connectors = ['それから', 'あと', '次に', 'つぎに'];
-    const finalParts: string[] = [];
-    for (const p of refinedParts) {
-      let subParts: string[] = [p];
-      for (const c of connectors) {
-        subParts = subParts.flatMap(sp => sp.split(c).map(s => s.trim()).filter(Boolean));
-      }
-      finalParts.push(...subParts);
-    }
-
-    // Filter to parts that look like questions or end with question-ish endings
-    return finalParts
-      .map(p => p.replace(/[、\s]+$/g, '').trim())
-      .filter(p => p.length >= 2 && (this.looksLikeQuestion(p) || /[?？]$/.test(p) || /(ですか|ますか|でしょうか|か)$/.test(p) || /(教えてください|お聞かせください|お願いします|お願いできますか|いただけますか|頂けますか|いただけませんか|てもらえますか|てくれますか|てください)$/.test(p)));
-  }
-
-  /**
-   * Remove unrelated preface before the core question. Heuristic: cut from
-   * the earliest occurrence of a question starter or polite-request marker.
-   */
-  private trimPreface(text: string): string {
-    const trimmed = text.trim();
-    if (!trimmed) return trimmed;
-
-    // Do NOT cut when sentence structure contains "について" before the question part
-    // Example: "Aについてどう思いますか？" -> keep the leading topic
-    const keepTopicPatterns = [/について.*(ですか|ますか|でしょうか|か|[?？]$)/];
-    if (keepTopicPatterns.some(p => p.test(trimmed))) {
-      return trimmed;
-    }
-
-    // Remove only leading filler/preamble tokens at the start (anchored)
-    const leadingPrefacePattern = /^(じゃあ|では|それでは|さて|ちなみに|ところで|えっと|えと|あの|その|とりあえず|まぁ|まぁその|なんていうか|まず|えー|あー|うー|そのー|えーっと)\s+/;
-    let result = trimmed;
-    // Remove repeatedly in case of stacked fillers
-    for (let i = 0; i < 3; i++) {
-      if (leadingPrefacePattern.test(result)) {
-        result = result.replace(leadingPrefacePattern, '').trim();
-      } else {
-        break;
-      }
-    }
-    return result;
   }
 
   /**
@@ -681,109 +414,8 @@ export class AudioStreamProcessor extends EventEmitter {
    */
   public clearQuestions(): void {
     this.state.questionBuffer = [];
+    this.streamingDetector.clear();
     this.emit('state-changed', { ...this.state });
-  }
-
-  /**
-   * NEW: Quick heuristic to detect recent question activity patterns
-   */
-  private hasRecentQuestionActivity(): boolean {
-    const now = Date.now();
-    
-    // Check if we've had recent question hints within last 3 seconds
-    if (now - this.lastQuestionHintTime < 3000) {
-      return true;
-    }
-    
-    // Quick pattern matching on recent audio buffer for question indicators
-    const recentText = this.recentAudioBuffer.join(' ').toLowerCase();
-    
-    // Japanese question patterns that suggest a question is being formed
-    const quickQuestionPatterns = [
-      'どう', 'どの', 'どこ', 'いつ', 'なぜ', 'なん', '何', 'だれ', '誰',
-      'ですか', 'ますか', 'でしょうか', 'か？', 'か。'
-    ];
-    
-    const hasQuestionPattern = quickQuestionPatterns.some(pattern => 
-      recentText.includes(pattern)
-    );
-    
-    if (hasQuestionPattern) {
-      this.lastQuestionHintTime = now;
-      console.log('[AudioStreamProcessor] Question hint detected in recent audio:', recentText.substring(0, 50));
-    }
-    
-    return hasQuestionPattern;
-  }
-
-  /**
-   * NEW: Real-time streaming question detection during transcription
-   */
-  private performStreamingQuestionDetection(newText: string): void {
-    const now = Date.now();
-    
-    // Add new text to streaming buffer
-    this.streamingBuffer += ' ' + newText;
-    
-    // Limit buffer size to prevent memory bloat (keep last 500 chars)
-    if (this.streamingBuffer.length > 500) {
-      this.streamingBuffer = this.streamingBuffer.slice(-500);
-    }
-    
-    // Only check every 500ms to avoid excessive processing
-    if (now - this.lastStreamingCheck < 500) {
-      return;
-    }
-    
-    this.lastStreamingCheck = now;
-    
-    // Quick streaming question detection using lightweight patterns
-    const streamingText = this.streamingBuffer.toLowerCase().trim();
-    
-    // Ultra-fast Japanese question pattern matching
-    const streamingQuestionPatterns = [
-      /どう[です|でしょう|思い|考え].*[か？]/,
-      /何[が|を|で|に].*[か？]/,
-      /いつ.*[か？]/,
-      /どこ.*[か？]/,
-      /だれ.*[か？]/,
-      /なぜ.*[か？]/,
-      /[です|ます]か[？。]/,
-      /でしょうか[？。]/
-    ];
-    
-    const hasStreamingQuestion = streamingQuestionPatterns.some(pattern => 
-      pattern.test(streamingText)
-    );
-    
-    if (hasStreamingQuestion) {
-      console.log('[AudioStreamProcessor] STREAMING question pattern detected:', streamingText.substring(0, 100));
-      
-      // Trigger immediate chunk processing if we detect a question pattern
-      if (this.currentAudioData.length > 0) {
-        console.log('[AudioStreamProcessor] Triggering immediate chunk processing due to streaming question detection');
-        this.createAndProcessChunk().catch(error => {
-          console.error('[AudioStreamProcessor] Error in streaming-triggered chunk processing:', error);
-        });
-      }
-      
-      // Clear buffer after detection to avoid re-triggering
-      this.streamingBuffer = '';
-    }
-  }
-
-  /**
-   * NEW: Update recent audio buffer for question hint detection
-   */
-  private updateRecentAudioBuffer(text: string): void {
-    if (!text || text.trim().length === 0) return;
-    
-    this.recentAudioBuffer.push(text.toLowerCase());
-    
-    // Keep only last 10 entries to avoid memory bloat
-    if (this.recentAudioBuffer.length > 10) {
-      this.recentAudioBuffer.shift();
-    }
   }
 
   /**
@@ -791,57 +423,6 @@ export class AudioStreamProcessor extends EventEmitter {
    */
   private calculateDuration(sampleCount: number): number {
     return (sampleCount / this.config.sampleRate) * 1000;
-  }
-
-  private async createTempAudioFile(buffer: Buffer): Promise<string> {
-    const tempPath = path.join(os.tmpdir(), `audio_${Date.now()}.wav`);
-    
-    // WAV file parameters
-    const sampleRate = this.config.sampleRate;
-    const channels = 1;
-    const bitsPerSample = 16;
-    const bytesPerSample = bitsPerSample / 8;
-    const blockAlign = channels * bytesPerSample;
-    const byteRate = sampleRate * blockAlign;
-    const dataSize = buffer.length;
-    const fileSize = 36 + dataSize;
-    
-    // Create WAV header (44 bytes total)
-    const header = Buffer.alloc(44);
-    let offset = 0;
-    
-    // RIFF Header
-    header.write('RIFF', offset); offset += 4;
-    header.writeUInt32LE(fileSize, offset); offset += 4;
-    header.write('WAVE', offset); offset += 4;
-    
-    // Format Chunk
-    header.write('fmt ', offset); offset += 4;
-    header.writeUInt32LE(16, offset); offset += 4;
-    header.writeUInt16LE(1, offset); offset += 2;
-    header.writeUInt16LE(channels, offset); offset += 2;
-    header.writeUInt32LE(sampleRate, offset); offset += 4;
-    header.writeUInt32LE(byteRate, offset); offset += 4;
-    header.writeUInt16LE(blockAlign, offset); offset += 2;
-    header.writeUInt16LE(bitsPerSample, offset); offset += 2;
-    
-    // Data Chunk Header
-    header.write('data', offset); offset += 4;
-    header.writeUInt32LE(dataSize, offset);
-    
-    // Combine header and PCM data
-    const wavFile = Buffer.concat([header, buffer]);
-    
-    await fs.promises.writeFile(tempPath, wavFile);
-    return tempPath;
-  }
-
-  private async cleanupTempFile(filePath: string): Promise<void> {
-    try {
-      await fs.promises.unlink(filePath);
-    } catch (error) {
-      console.warn('[AudioStreamProcessor] Failed to cleanup temp file:', filePath);
-    }
   }
 
   /**

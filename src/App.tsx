@@ -1,12 +1,13 @@
 import { ToastProvider } from "./components/ui/toast";
-import Queue from "./_pages/Queue";
 import { ToastViewport } from "@radix-ui/react-toast";
 import { useEffect, useRef, useState } from "react";
-import Solutions from "./_pages/Solutions";
 import { QueryClient, QueryClientProvider } from "react-query";
 import { AuthDialog } from "./components/ui/auth-dialog";
 import { DevAuthDialog } from "./components/ui/dev-auth-dialog";
 import { PermissionDialog } from "./components/ui/permission-dialog";
+import { AppRouter } from "./components/AppRouter";
+import { useAuth } from "./hooks/useAuth";
+import { usePermissions } from "./hooks/usePermissions";
 
 declare global {
   interface Window {
@@ -149,94 +150,31 @@ const queryClient = new QueryClient({
   },
 });
 
-interface AuthState {
-  user: any | null;
-  session: any | null;
-  isLoading: boolean;
-}
-
-interface PermissionState {
-  isFirstTime: boolean;
-  isLoading: boolean;
-  isCompleted: boolean;
-}
-
 const App: React.FC = () => {
   const [view, setView] = useState<"queue" | "solutions" | "debug">("queue");
   const containerRef = useRef<HTMLDivElement>(null);
   const [isDevAuthOpen, setIsDevAuthOpen] = useState(false);
 
-  // Permission state for first-time setup
-  const [permissionState, setPermissionState] = useState<PermissionState>({
-    isFirstTime: true,
-    isLoading: true,
-    isCompleted: false,
-  });
+  // Use custom hooks for auth and permissions
+  const [permissionState, handlePermissionsCompleted] = usePermissions();
+  const [authState, authHandlers] = useAuth(queryClient);
 
-  // Authentication state
-  const [authState, setAuthState] = useState<AuthState>({
-    user: null,
-    session: null,
-    isLoading: true,
-  });
-
-  // Initialize auth state and permission state
+  // Listen for developer auth shortcut
   useEffect(() => {
-    const initAuth = async () => {
-      try {
-        const initialState = await window.electronAPI.authGetState();
-        setAuthState(initialState);
-      } catch (error) {
-        console.error("Error getting initial auth state:", error);
-        setAuthState({ user: null, session: null, isLoading: false });
-      }
-    };
-
-    const initPermissions = async () => {
-      try {
-        const result = await window.electronAPI.invoke('permission-check-first-time');
-        setPermissionState({
-          isFirstTime: result.isFirstTime,
-          isLoading: false,
-          isCompleted: !result.isFirstTime,
-        });
-      } catch (error) {
-        console.error("Error checking first time setup:", error);
-        setPermissionState({
-          isFirstTime: true,
-          isLoading: false,
-          isCompleted: false,
-        });
-      }
-    };
-
-    initAuth();
-    initPermissions();
-
-    // Listen for auth state changes
-    const cleanup = window.electronAPI.onAuthStateChange((state) => {
-      setAuthState(state);
-      // If user was previously unauthenticated and now is authenticated, show window
-      if (state.user && !state.isLoading) {
-        console.log("User signed in successfully");
-        // Close dev auth dialog if it's open
-        setIsDevAuthOpen(false);
-      }
-    });
-
-    // Listen for developer auth shortcut
     const devAuthCleanup = window.electronAPI.onDevAuthOpen(() => {
       console.log("Developer auth dialog requested via Command+Z");
       setIsDevAuthOpen(true);
     });
 
-    return () => {
-      cleanup();
-      devAuthCleanup();
-    };
-  }, []);
+    // Close dev auth dialog when user signs in
+    if (authState.user && !authState.isLoading) {
+      setIsDevAuthOpen(false);
+    }
 
-  // Effect for height monitoring
+    return devAuthCleanup;
+  }, [authState.user, authState.isLoading]);
+
+  // Effect for height monitoring and reset view
   useEffect(() => {
     const cleanup = window.electronAPI.onResetView(() => {
       console.log("Received 'reset-view' message from main process.");
@@ -247,11 +185,10 @@ const App: React.FC = () => {
       setView("queue");
     });
 
-    return () => {
-      cleanup();
-    };
+    return cleanup;
   }, []);
 
+  // Effect for content dimensions monitoring
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -262,21 +199,14 @@ const App: React.FC = () => {
       window.electronAPI?.updateContentDimensions({ width, height });
     };
 
-    const resizeObserver = new ResizeObserver(() => {
-      updateHeight();
-    });
+    const resizeObserver = new ResizeObserver(updateHeight);
+    const mutationObserver = new MutationObserver(updateHeight);
 
     // Initial height update
     updateHeight();
 
     // Observe for changes
     resizeObserver.observe(containerRef.current);
-
-    // Also update height when view changes
-    const mutationObserver = new MutationObserver(() => {
-      updateHeight();
-    });
-
     mutationObserver.observe(containerRef.current, {
       childList: true,
       subtree: true,
@@ -288,93 +218,7 @@ const App: React.FC = () => {
       resizeObserver.disconnect();
       mutationObserver.disconnect();
     };
-  }, [view]); // Re-run when view changes
-
-  // Auth handlers
-  const handleSignIn = async (email: string, password: string) => {
-    try {
-      return await window.electronAPI.authSignIn(email, password);
-    } catch (error) {
-      console.error("Sign in error:", error);
-      return { success: false, error: "Sign in failed" };
-    }
-  };
-
-  const handleSignUp = async (email: string, password: string) => {
-    try {
-      return await window.electronAPI.authSignUp(email, password);
-    } catch (error) {
-      console.error("Sign up error:", error);
-      return { success: false, error: "Sign up failed" };
-    }
-  };
-
-  const handleResetPassword = async (email: string) => {
-    try {
-      return await window.electronAPI.authResetPassword(email);
-    } catch (error) {
-      console.error("Reset password error:", error);
-      return { success: false, error: "Password reset failed" };
-    }
-  };
-
-  const handleSignOut = async () => {
-    try {
-      const result = await window.electronAPI.authSignOut();
-      if (result.success) {
-        // Clear all queries when signing out
-        queryClient.clear();
-        setView("queue");
-      }
-      return result;
-    } catch (error) {
-      console.error("Sign out error:", error);
-      return { success: false, error: "Sign out failed" };
-    }
-  };
-
-  // Handle permission setup completion
-  const handlePermissionsCompleted = () => {
-    setPermissionState(prev => ({
-      ...prev,
-      isCompleted: true,
-    }));
-  };
-
-  useEffect(() => {
-    const cleanupFunctions = [
-      window.electronAPI.onSolutionStart(() => {
-        setView("solutions");
-        console.log("starting processing");
-      }),
-
-      window.electronAPI.onUnauthorized(() => {
-        queryClient.removeQueries(["screenshots"]);
-        queryClient.removeQueries(["solution"]);
-        queryClient.removeQueries(["problem_statement"]);
-        setView("queue");
-        console.log("Unauthorized");
-      }),
-      // Update this reset handler
-      window.electronAPI.onResetView(() => {
-        console.log("Received 'reset-view' message from main process");
-
-        queryClient.removeQueries(["screenshots"]);
-        queryClient.removeQueries(["solution"]);
-        queryClient.removeQueries(["problem_statement"]);
-        setView("queue");
-        console.log("View reset to 'queue' via Command+R shortcut");
-      }),
-      window.electronAPI.onProblemExtracted((data: any) => {
-        if (view === "queue") {
-          console.log("Problem extracted successfully");
-          queryClient.invalidateQueries(["problem_statement"]);
-          queryClient.setQueryData(["problem_statement"], data);
-        }
-      }),
-    ];
-    return () => cleanupFunctions.forEach((cleanup) => cleanup());
-  }, []);
+  }, [view]);
 
   // If permissions are loading, show loading
   if (permissionState.isLoading) {
@@ -436,16 +280,16 @@ const App: React.FC = () => {
               isOpen={!isDevAuthOpen}
               onOpenChange={() => {}} // Prevent closing until authenticated
               authState={authState}
-              onSignIn={handleSignIn}
-              onSignUp={handleSignUp}
-              onSignOut={handleSignOut}
-              onResetPassword={handleResetPassword}
+              onSignIn={authHandlers.handleSignIn}
+              onSignUp={authHandlers.handleSignUp}
+              onSignOut={authHandlers.handleSignOut}
+              onResetPassword={authHandlers.handleResetPassword}
             />
             <DevAuthDialog
               isOpen={isDevAuthOpen}
               onOpenChange={setIsDevAuthOpen}
-              onSignIn={handleSignIn}
-              onSignUp={handleSignUp}
+              onSignIn={authHandlers.handleSignIn}
+              onSignUp={authHandlers.handleSignUp}
             />
             <ToastViewport />
           </ToastProvider>
@@ -483,18 +327,17 @@ const App: React.FC = () => {
     <div ref={containerRef} className="min-h-0">
       <QueryClientProvider client={queryClient}>
         <ToastProvider>
-          {view === "queue" ? (
-            <Queue setView={setView} onSignOut={handleSignOut} />
-          ) : view === "solutions" ? (
-            <Solutions setView={setView} />
-          ) : (
-            <></>
-          )}
+          <AppRouter
+            view={view}
+            setView={setView}
+            onSignOut={authHandlers.handleSignOut}
+            queryClient={queryClient}
+          />
           <DevAuthDialog
             isOpen={isDevAuthOpen}
             onOpenChange={setIsDevAuthOpen}
-            onSignIn={handleSignIn}
-            onSignUp={handleSignUp}
+            onSignIn={authHandlers.handleSignIn}
+            onSignUp={authHandlers.handleSignUp}
           />
           <ToastViewport />
         </ToastProvider>
