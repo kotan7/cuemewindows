@@ -1,6 +1,6 @@
 // ProcessingHelper.ts
 
-import { AppState } from "./main"
+import { AppState } from "./core/AppState"
 import { LLMHelper } from "./LLMHelper"
 // Note: dotenv is already loaded in main.ts, no need to load again
 

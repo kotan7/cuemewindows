@@ -2,7 +2,7 @@
 We keep all important docs in .agent folder and keep updating them
 We should always update .agent docs after we implement certain feature, to make sure it fully reflect the up to date information (mark the related files as you do this)
 Before you plan any implementation, always read the .agent/README.md first to get context
-Never create summary docs after implementation unless you are asked to. Conclude everything within the initial task doc assigned.
+IMPORTANT: DO NOT create summary docs after implementation unless you are asked to do so explicitly. Conclude everything within the initial task doc assigned.
 
 ## Folder Structure
 
