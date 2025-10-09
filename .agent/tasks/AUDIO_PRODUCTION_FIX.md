@@ -165,6 +165,24 @@ lipo -info dist-native/SystemAudioCapture
 - `native/SystemAudioCapture.swift` - Swift binary source
 - `assets/entitlements.mac.plist` - App entitlements
 
+## Additional Issues Fixed
+
+### Vite Build Error with `diff` Package
+**Error:** `Failed to resolve import "./index.js" from "node_modules/@types/diff/index.d.mts"`
+
+**Root Cause:** In `src/_pages/Debug.tsx`, the `diffLines` function was incorrectly imported from `"../../node_modules/@types/diff"` instead of `"diff"`. This caused Vite to try to resolve the TypeScript type definitions as a module, which failed because the `.d.mts` file structure doesn't match the actual package.
+
+**Solution:** Fixed the import statement to use the correct package name:
+```typescript
+// Before (incorrect):
+import { diffLines } from "../../node_modules/@types/diff"
+
+// After (correct):
+import { diffLines } from "diff"
+```
+
+**File Modified:** `src/_pages/Debug.tsx`
+
 ---
 **Created:** 2025/10/9
 **Status:** In Progress
