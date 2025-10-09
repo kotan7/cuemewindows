@@ -163,6 +163,20 @@ const QueueCommands = forwardRef<QueueCommandsRef, QueueCommandsProps>(
       };
     }, [isDropdownOpen]);
 
+    // Listen for keyboard shortcut to toggle listen
+    useEffect(() => {
+      const handleTriggerListenToggle = () => {
+        console.log("[QueueCommands] Listen toggle triggered via keyboard shortcut");
+        handleListenToggle();
+      };
+
+      document.addEventListener("trigger-listen-toggle", handleTriggerListenToggle);
+
+      return () => {
+        document.removeEventListener("trigger-listen-toggle", handleTriggerListenToggle);
+      };
+    }, [isListening, isAuthenticated]); // Include dependencies so the handler has access to current state
+
     // Update dropdown position when opened
     useEffect(() => {
       if (isDropdownOpen && triggerRef.current) {

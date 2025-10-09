@@ -106,6 +106,15 @@ export class ShortcutsHelper {
       }
     })
 
+    // Listen (live question) toggle shortcut
+    globalShortcut.register("CommandOrControl+L", () => {
+      console.log("Command/Ctrl + L pressed. Toggling listen...")
+      const mainWindow = this.appState.getMainWindow()
+      if (mainWindow) {
+        mainWindow.webContents.send("toggle-listen")
+      }
+    })
+
     // Secret developer authentication shortcut
     globalShortcut.register("CommandOrControl+Z", () => {
       console.log("Command/Ctrl + Z pressed. Opening developer auth dialog...")

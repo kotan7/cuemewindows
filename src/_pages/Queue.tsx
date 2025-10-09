@@ -755,6 +755,17 @@ const Queue: React.FC<QueueProps> = ({ setView, onSignOut }) => {
       setIsChatOpen((prev) => !prev);
     };
 
+    const handleListenToggle = () => {
+      // Trigger the listen button in QueueCommands
+      if (queueCommandsRef.current) {
+        // Call the exposed stopListening method, or we can add a toggle method
+        console.log("[Queue] Listen toggle triggered via Command+L");
+        // Since we don't have a toggle method exposed, we'll trigger the button click
+        // by dispatching a custom event that QueueCommands can listen to
+        document.dispatchEvent(new CustomEvent('trigger-listen-toggle'));
+      }
+    };
+
     // Handle usage limit events from voice recording
     const handleUsageLimitExceeded = () => {
       handleUsageLimitError();
@@ -766,9 +777,12 @@ const Queue: React.FC<QueueProps> = ({ setView, onSignOut }) => {
         if (window.electronAPI) {
           const cleanupChatToggle =
             window.electronAPI.onChatToggle(handleChatToggle);
+          const cleanupListenToggle =
+            window.electronAPI.onListenToggle(handleListenToggle);
 
           return () => {
             cleanupChatToggle();
+            cleanupListenToggle();
           };
         }
       } catch (error) {

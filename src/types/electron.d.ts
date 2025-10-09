@@ -70,6 +70,7 @@ interface ElectronAPI {
   onAudioStreamStateChanged: (callback: (state: AudioStreamState) => void) => () => void
   onAudioStreamError: (callback: (error: string) => void) => () => void
   onChatToggle: (callback: () => void) => () => void
+  onListenToggle: (callback: () => void) => () => void
 }
 
 declare global {
