@@ -59,6 +59,14 @@ export class SystemAudioCapture extends EventEmitter {
     this.checkScreenCaptureKitAvailability();
 
     console.log('[SystemAudioCapture] Initialized with config:', this.config);
+    console.log('[SystemAudioCapture] Environment:', {
+      isDev,
+      isPackaged: app.isPackaged,
+      resourcesPath: process.resourcesPath,
+      cwd: process.cwd(),
+      platform: process.platform,
+      arch: process.arch
+    });
     console.log('[SystemAudioCapture] Swift binary path:', this.swiftBinaryPath);
     console.log('[SystemAudioCapture] ScreenCaptureKit available:', this.useScreenCaptureKit);
   }
@@ -74,11 +82,36 @@ export class SystemAudioCapture extends EventEmitter {
         return;
       }
 
+      console.log('[SystemAudioCapture] Checking binary at:', this.swiftBinaryPath);
+      
       if (fs.existsSync(this.swiftBinaryPath)) {
-        console.log('[SystemAudioCapture] ScreenCaptureKit binary found');
+        const stats = fs.statSync(this.swiftBinaryPath);
+        const isExecutable = (stats.mode & fs.constants.S_IXUSR) !== 0;
+        
+        console.log('[SystemAudioCapture] Binary found:', {
+          size: stats.size,
+          mode: stats.mode.toString(8),
+          isExecutable,
+          isFile: stats.isFile()
+        });
+        
+        if (!isExecutable) {
+          console.warn('[SystemAudioCapture] ⚠️  Binary exists but is not executable!');
+          console.warn('[SystemAudioCapture] This is likely a packaging issue.');
+          console.warn('[SystemAudioCapture] Attempting to set execute permissions...');
+          
+          try {
+            fs.chmodSync(this.swiftBinaryPath, 0o755);
+            console.log('[SystemAudioCapture] ✅ Execute permissions set');
+          } catch (chmodError) {
+            console.error('[SystemAudioCapture] ❌ Failed to set execute permissions:', chmodError);
+          }
+        }
+        
         this.useScreenCaptureKit = true;
       } else {
-        console.log('[SystemAudioCapture] ScreenCaptureKit binary not found, using fallback');
+        console.log('[SystemAudioCapture] ScreenCaptureKit binary not found at expected path');
+        console.log('[SystemAudioCapture] Using fallback audio capture method');
         this.useScreenCaptureKit = false;
       }
     } catch (error) {

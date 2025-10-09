@@ -53,21 +53,68 @@ cd "$NATIVE_DIR"
 
 echo "🔨 Compiling Swift binary with swiftc..."
 
-# Use swiftc directly for simpler compilation
+# Detect current architecture
+CURRENT_ARCH=$(uname -m)
+echo "📋 Current architecture: $CURRENT_ARCH"
+
+# Try to build universal binary first
+echo "🔨 Attempting universal binary build..."
+
+# Build for arm64
 swiftc -O \
     -target arm64-apple-macos12.3 \
-    -target x86_64-apple-macos12.3 \
     SystemAudioCapture.swift \
-    -o "$BUILD_DIR/SystemAudioCapture" \
+    -o "$BUILD_DIR/SystemAudioCapture_arm64" \
     -framework Foundation \
     -framework ScreenCaptureKit \
     -framework AVFoundation \
     -framework CoreAudio
 
-if [[ $? -eq 0 ]]; then
-    echo "✅ Binary compiled successfully"
+ARM64_SUCCESS=$?
+
+# Build for x86_64
+swiftc -O \
+    -target x86_64-apple-macos12.3 \
+    SystemAudioCapture.swift \
+    -o "$BUILD_DIR/SystemAudioCapture_x86_64" \
+    -framework Foundation \
+    -framework ScreenCaptureKit \
+    -framework AVFoundation \
+    -framework CoreAudio
+
+X86_SUCCESS=$?
+
+# Create universal binary if both succeeded
+if [[ $ARM64_SUCCESS -eq 0 ]] && [[ $X86_SUCCESS -eq 0 ]]; then
+    echo "🔗 Creating universal binary with lipo..."
+    lipo -create \
+        "$BUILD_DIR/SystemAudioCapture_arm64" \
+        "$BUILD_DIR/SystemAudioCapture_x86_64" \
+        -output "$BUILD_DIR/SystemAudioCapture"
+    
+    if [[ $? -eq 0 ]]; then
+        echo "✅ Universal binary created successfully"
+        # Clean up architecture-specific binaries
+        rm -f "$BUILD_DIR/SystemAudioCapture_arm64" "$BUILD_DIR/SystemAudioCapture_x86_64"
+    else
+        echo "❌ Failed to create universal binary, using current architecture"
+        if [[ "$CURRENT_ARCH" == "arm64" ]]; then
+            mv "$BUILD_DIR/SystemAudioCapture_arm64" "$BUILD_DIR/SystemAudioCapture"
+        else
+            mv "$BUILD_DIR/SystemAudioCapture_x86_64" "$BUILD_DIR/SystemAudioCapture"
+        fi
+        rm -f "$BUILD_DIR/SystemAudioCapture_arm64" "$BUILD_DIR/SystemAudioCapture_x86_64"
+    fi
+elif [[ $ARM64_SUCCESS -eq 0 ]]; then
+    echo "⚠️  x86_64 build failed, using arm64 only"
+    mv "$BUILD_DIR/SystemAudioCapture_arm64" "$BUILD_DIR/SystemAudioCapture"
+    rm -f "$BUILD_DIR/SystemAudioCapture_x86_64"
+elif [[ $X86_SUCCESS -eq 0 ]]; then
+    echo "⚠️  arm64 build failed, using x86_64 only"
+    mv "$BUILD_DIR/SystemAudioCapture_x86_64" "$BUILD_DIR/SystemAudioCapture"
+    rm -f "$BUILD_DIR/SystemAudioCapture_arm64"
 else
-    echo "❌ Compilation failed, trying single architecture..."
+    echo "❌ Both architecture builds failed, trying current architecture only..."
     # Try single architecture as fallback
     swiftc -O \
         SystemAudioCapture.swift \

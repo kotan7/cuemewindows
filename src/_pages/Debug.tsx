@@ -13,7 +13,7 @@ import {
   ToastVariant
 } from "../components/ui/toast"
 import ExtraScreenshotsQueueHelper from "../components/Solutions/SolutionCommands"
-import { diffLines } from "diff"
+import { diffLines } from "../../node_modules/@types/diff"
 
 type DiffLine = {
   value: string
