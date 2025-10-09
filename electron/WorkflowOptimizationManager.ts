@@ -45,23 +45,23 @@ export interface OptimizationStatus {
  */
 export class WorkflowOptimizationManager extends EventEmitter {
   private config: OptimizationConfig;
-  
+
   // Core optimization components (temporarily disabled for build)
-  // private cacheLayer: IntelligentCacheLayer | null = null;
-  // private parallelEngine: ParallelProcessingEngine | null = null;
-  // private streamingPipeline: StreamingAudioPipeline | null = null;
-  // private performanceOrchestrator: PerformanceOrchestrator | null = null;
-  // private memoryManager: MemoryOptimizationManager | null = null;
+  private cacheLayer: any | null = null;
+  private parallelEngine: any | null = null;
+  private streamingPipeline: any | null = null;
+  private performanceOrchestrator: any | null = null;
+  private memoryManager: any | null = null;
   private connectionManager: ConnectionPoolManager | null = null;
   private qualityManager: AdaptiveQualityManager | null = null;
-  
+
   // Status tracking
   private isInitialized: boolean = false;
   private optimizationStatus: OptimizationStatus;
   private metrics: OptimizationMetrics;
   private lastSystemLoad: SystemLoadMetrics | null = null;
   private currentUserContext: UserContext;
-  
+
   // Performance tracking
   private optimizationHistory: Array<{
     timestamp: number;
@@ -72,7 +72,7 @@ export class WorkflowOptimizationManager extends EventEmitter {
 
   constructor(config: Partial<OptimizationConfig> = {}) {
     super();
-    
+
     this.config = {
       enableCaching: true,
       enableParallelProcessing: true,
@@ -120,8 +120,8 @@ export class WorkflowOptimizationManager extends EventEmitter {
    * Task 3: Build intelligent caching layer ✅
    * Task 4: Implement parallel processing engine ✅
    */
-    // @measureTime('WorkflowOptimizationManager.initialize')
-    // @measureMemory('WorkflowOptimizationManager.initialize')
+  // @measureTime('WorkflowOptimizationManager.initialize')
+  // @measureMemory('WorkflowOptimizationManager.initialize')
   public async initialize(openaiApiKey?: string): Promise<void> {
     if (this.isInitialized) {
       console.log('[WorkflowOptimizationManager] Already initialized');
@@ -167,7 +167,7 @@ export class WorkflowOptimizationManager extends EventEmitter {
    * Execute comprehensive workflow optimization
    * Implements coordinated optimization across all components
    */
-    // @measureTime('WorkflowOptimizationManager.optimizeWorkflow')
+  // @measureTime('WorkflowOptimizationManager.optimizeWorkflow')
   public async optimizeWorkflow(
     systemLoad: SystemLoadMetrics,
     userContext: Partial<UserContext> = {}
@@ -281,7 +281,7 @@ export class WorkflowOptimizationManager extends EventEmitter {
    * Get real-time performance metrics
    * Task 12.1: Create real-time monitoring dashboard
    */
-    // @measureTime('WorkflowOptimizationManager.getMetrics')
+  // @measureTime('WorkflowOptimizationManager.getMetrics')
   public async getMetrics(): Promise<OptimizationMetrics> {
     await this.updateMetrics();
     return { ...this.metrics };
@@ -333,7 +333,7 @@ export class WorkflowOptimizationManager extends EventEmitter {
       this.cacheLayer.on('cache-hit', (data) => {
         this.emit('cache-hit', data);
       });
-      
+
       this.cacheLayer.on('eviction-complete', (data) => {
         console.log(`[WorkflowOptimizationManager] Cache eviction: ${data.evictCount} entries`);
       });
@@ -344,7 +344,7 @@ export class WorkflowOptimizationManager extends EventEmitter {
       this.memoryManager.on('memory-pressure', (pressureLevel) => {
         console.log(`[WorkflowOptimizationManager] Memory pressure: ${pressureLevel.level}`);
         this.emit('memory-pressure', pressureLevel);
-        
+
         // Trigger automatic optimization on high memory pressure
         if (pressureLevel.level === 'high' || pressureLevel.level === 'critical') {
           this.forceOptimization().catch(error => {
