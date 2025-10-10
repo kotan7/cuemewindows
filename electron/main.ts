@@ -2,6 +2,31 @@
 import { EnvLoader } from "./core/EnvLoader";
 EnvLoader.load();
 
+// TEMPORARY: Force API key for testing (REMOVE AFTER TESTING)
+if (!process.env.OPENAI_API_KEY) {
+  console.log('🔑 [TEMP] Setting OpenAI API key for testing');
+  process.env.OPENAI_API_KEY = 'sk-your-actual-openai-key-here'; // Replace with your real key
+}
+
+// IMMEDIATE DEBUG - Log environment status
+console.log('🚨 [PRODUCTION DEBUG] Environment check:');
+console.log('  NODE_ENV:', process.env.NODE_ENV);
+console.log('  OPENAI_API_KEY present:', !!process.env.OPENAI_API_KEY);
+console.log('  Process info:', {
+  cwd: process.cwd(),
+  resourcesPath: process.resourcesPath,
+  platform: process.platform
+});
+
+// Debug audio system in production builds
+import { AudioDebugger } from "./AudioDebugger";
+if (process.env.NODE_ENV === 'production' || !process.env.NODE_ENV) {
+  // Run diagnostics after a short delay to ensure Electron is ready
+  setTimeout(() => {
+    AudioDebugger.diagnoseAudioSystem().catch(console.error);
+  }, 2000);
+}
+
 import { app } from "electron";
 import { initializeIpcHandlers } from "./ipc";
 import { AppState } from "./core/AppState";
@@ -38,6 +63,13 @@ async function initializeApp() {
   console.log('[App Init] Starting application initialization...');
   console.log('[App Init] Process args:', process.argv);
   console.log('[App Init] ==============================');
+  
+  // Set app identification early for proper permission dialogs on macOS
+  app.setName('CueMe');
+  if (process.platform === 'darwin') {
+    app.setAppUserModelId('com.cueme.interview-assistant');
+    console.log('[App Init] Set app name and ID for macOS permission dialogs');
+  }
   
   // Validate environment variables
   const envValidation = EnvLoader.validate();

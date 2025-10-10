@@ -11,6 +11,13 @@ export class EnvLoader {
    * Tries multiple paths in order of preference
    */
   static load(): void {
+    console.log('[ENV] Debug info:', {
+      cwd: process.cwd(),
+      resourcesPath: process.resourcesPath,
+      isPackaged: process.env.NODE_ENV === 'production' || !process.env.NODE_ENV,
+      platform: process.platform
+    });
+    
     const envPaths = [
       path.join(process.cwd(), '.env.local'),
       path.join(process.cwd(), '.env'),
@@ -19,6 +26,8 @@ export class EnvLoader {
       '.env.local',
       '.env'
     ];
+    
+    console.log('[ENV] Attempting to load from paths:', envPaths);
 
     let envLoaded = false;
     for (const envPath of envPaths) {
