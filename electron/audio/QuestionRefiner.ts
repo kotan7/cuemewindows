@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from "uuid";
 
 /**
  * Handles question detection and refinement
+ * Phase 2A: Expanded pattern matching for faster question detection
  */
 export class QuestionRefiner {
   private questionDetector: QuestionDetector;
@@ -19,26 +20,30 @@ export class QuestionRefiner {
     'あの', 'その', 'とりあえず', 'まぁ', 'まぁその', 'なんていうか'
   ]);
 
+  // Phase 2A: Expanded question starters for better detection
   private readonly questionStarters = new Set([
     'どう', 'どの', 'どこ', 'いつ', 'なぜ', 'なん', '何', 'だれ', '誰',
-    'どちら', 'どれ', 'いくら', 'いくつ', 'どのよう', 'どんな'
+    'どちら', 'どれ', 'いくら', 'いくつ', 'どのよう', 'どんな',
+    // Additional starters
+    'どうして', 'どうやって', 'どういう', 'どうすれば', 'どうなる',
+    'なにが', 'なにを', 'なにで', 'なにに', 'なにから',
+    'いつから', 'いつまで', 'いつごろ', 'いつ頃',
+    'どこで', 'どこに', 'どこから', 'どこまで',
+    'だれが', 'だれを', 'だれに', 'だれと',
+    '誰が', '誰を', '誰に', '誰と'
   ]);
 
   constructor() {
     this.questionDetector = new QuestionDetector();
-    console.log('[QuestionRefiner] Initialized');
   }
 
   /**
    * Detect questions and immediately refine them algorithmically
    */
-  public async detectAndRefineQuestions(transcription: TranscriptionResult): Promise<DetectedQuestion[]> {
+  public detectAndRefineQuestions(transcription: TranscriptionResult): DetectedQuestion[] {
     try {
-      console.log(`[QuestionRefiner] Detecting questions in: "${transcription.text}"`);
-      
       // Skip empty or very short transcriptions
       if (!transcription.text || transcription.text.trim().length < 3) {
-        console.log('[QuestionRefiner] Skipping question detection - text too short');
         return [];
       }
 
@@ -49,16 +54,15 @@ export class QuestionRefiner {
       const questionParts = this.splitIntoQuestions(baseText);
 
       if (questionParts.length === 0) {
-        console.log('[QuestionRefiner] No questions detected');
         return [];
       }
 
-      console.log(`[QuestionRefiner] Found ${questionParts.length} potential questions:`, questionParts);
-
-      // Process each question part with PARALLEL processing for speed
-      const questionPromises = questionParts.map(async (part) => {
+      // Process each question part synchronously (no async overhead)
+      const allQuestions: DetectedQuestion[] = [];
+      
+      for (const part of questionParts) {
         const core = this.trimPreface(part);
-        if (!core || core.trim().length < 2) return null;
+        if (!core || core.trim().length < 2) continue;
 
         const tempQuestion: DetectedQuestion = {
           id: uuidv4(),
@@ -69,7 +73,7 @@ export class QuestionRefiner {
 
         // Validate by either the detector's rules or our heuristic recognizer
         if (!this.questionDetector.isValidQuestion(tempQuestion) && !this.looksLikeQuestion(core)) {
-          return null;
+          continue;
         }
 
         const refinedText = this.refineQuestionAlgorithmically(core);
@@ -79,12 +83,8 @@ export class QuestionRefiner {
           refinedText
         };
 
-        console.log(`[QuestionRefiner] Question detected: "${refinedText}"`);
-        return refinedQuestion;
-      });
-
-      // Wait for all parallel processing to complete
-      const allQuestions = (await Promise.all(questionPromises)).filter(q => q !== null) as DetectedQuestion[];
+        allQuestions.push(refinedQuestion);
+      }
       
       return allQuestions;
       
@@ -98,8 +98,6 @@ export class QuestionRefiner {
    * Algorithmically refine question text by removing fillers and cleaning up
    */
   private refineQuestionAlgorithmically(text: string): string {
-    console.log('[QuestionRefiner] Starting algorithmic refinement for:', text);
-    
     try {
       let refined = text.toLowerCase().trim();
       
@@ -145,15 +143,8 @@ export class QuestionRefiner {
       
       // Fallback: if we cleaned too much, return original
       if (refined.length < 3 || refined.replace(/[？?]/g, '').trim().length < 2) {
-        console.log('[QuestionRefiner] Refinement too aggressive, using original');
         return text;
       }
-      
-      console.log('[QuestionRefiner] Algorithmic refinement complete:', {
-        original: text,
-        refined: refined,
-        removedWords: words.length - cleanedWords.length
-      });
       
       return refined;
       
@@ -165,13 +156,34 @@ export class QuestionRefiner {
 
   /**
    * Check if text structure looks like a question
+   * Phase 2A: Expanded patterns for better detection
    */
   private looksLikeQuestion(text: string): boolean {
     const questionPatterns = [
-      /どう.*/, /どの.*/, /どこ.*/, /いつ.*/, /なぜ.*/, /なん.*/, /何.*/, 
-      /だれ.*/, /誰.*/, /どちら.*/, /どれ.*/, /いくら.*/, /いくつ.*/,
-      /.*ですか/, /.*ますか/, /.*でしょうか/, /.*かしら/, /.*のか/,
-      /.*(教えてください|お聞かせください|お願いします|お願いできますか|お願いしてもいいですか|いただけますか|頂けますか|いただけませんか|てもらえますか|てくれますか|てください)[。?？]?$/
+      // Question starters (expanded)
+      /どう[して|やって|いう|すれば|なる]?.*/, 
+      /どの.*/, /どこ[で|に|から|まで]?.*/, 
+      /いつ[から|まで|頃|ごろ]?.*/, 
+      /なぜ.*/, /なん.*/, /何[が|を|で|に|の|から]?.*/, 
+      /だれ[が|を|に|と]?.*/, /誰[が|を|に|と]?.*/, 
+      /どちら.*/, /どれ.*/, /いくら.*/, /いくつ.*/,
+      /どんな.*/,
+      
+      // Question endings (expanded)
+      /.*ですか/, /.*ますか/, /.*でしょうか/, /.*ませんか/,
+      /.*かしら/, /.*のか/, /.*んですか/, /.*んでしょうか/,
+      
+      // Polite requests (expanded)
+      /.*(教えて[ください|くれ|もらえ|いただけ])/, 
+      /.*(お聞かせ[ください|いただけ])/,
+      /.*(お願い[します|できます|してもいい])/,
+      /.*(いただけ[ます|ません]か)/,
+      /.*(もらえ[ます|ません]か)/,
+      /.*(くれ[ます|ません]か)/,
+      /.*(教えて|お聞かせ|お願い|いただけ|もらえ|くれ)[。?？]?$/,
+      
+      // English patterns
+      /\b(what|how|why|when|where|who|which|can|could|should|would|will)\b/i
     ];
     
     return questionPatterns.some(pattern => pattern.test(text));

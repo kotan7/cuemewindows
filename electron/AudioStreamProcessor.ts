@@ -77,32 +77,23 @@ export class AudioStreamProcessor extends EventEmitter {
 
     // Setup system audio capture event listeners
     this.setupSystemAudioEvents();
-
-    console.log('[AudioStreamProcessor] Initialized with modular architecture');
   }
 
   /**
    * Start always-on audio listening with specified audio source
    */
   public async startListening(audioSourceId?: string): Promise<void> {
-    if (this.state.isListening) {
-      console.log('[AudioStreamProcessor] Already listening');
-      return;
-    }
+    if (this.state.isListening) return;
 
     try {
       // If audio source is specified and it's system audio, start system capture
       if (audioSourceId && audioSourceId !== 'microphone') {
-        console.log('[AudioStreamProcessor] Starting system audio capture for source:', audioSourceId);
-        
         try {
           await this.systemAudioCapture.startCapture(audioSourceId);
           const captureState = this.systemAudioCapture.getState();
           this.state.currentAudioSource = captureState.currentSource;
           
         } catch (systemError) {
-          console.warn('[AudioStreamProcessor] System audio capture failed, attempting fallback:', systemError);
-          
           // Enhanced fallback strategy
           let fallbackSucceeded = false;
           const fallbackAttempts = [
@@ -115,8 +106,6 @@ export class AudioStreamProcessor extends EventEmitter {
           
           for (const fallback of fallbackAttempts) {
             try {
-              console.log(`[AudioStreamProcessor] Attempting fallback: ${fallback.description}`);
-              
               this.state.currentAudioSource = {
                 id: fallback.id,
                 name: fallback.name,
@@ -127,12 +116,11 @@ export class AudioStreamProcessor extends EventEmitter {
               fallbackSucceeded = true;
               break;
             } catch (fallbackError) {
-              console.warn(`[AudioStreamProcessor] Fallback ${fallback.id} failed:`, fallbackError);
+              // Silent fallback failure
             }
           }
           
           if (fallbackSucceeded) {
-            // Emit a user-friendly warning with specific guidance
             const errorMessage = this.getSystemAudioErrorMessage(systemError as Error);
             this.emit('error', new Error(errorMessage));
           } else {
@@ -147,14 +135,11 @@ export class AudioStreamProcessor extends EventEmitter {
           type: 'microphone',
           available: true
         };
-        console.log('[AudioStreamProcessor] Using microphone input (default)');
       }
 
       this.state.isListening = true;
       this.state.lastActivityTime = Date.now();
       this.emit('state-changed', { ...this.state });
-      
-      console.log('[AudioStreamProcessor] Started listening for audio from:', this.state.currentAudioSource?.name);
       
     } catch (error) {
       this.state.isListening = false;
@@ -169,10 +154,7 @@ export class AudioStreamProcessor extends EventEmitter {
    * Stop audio listening
    */
   public async stopListening(): Promise<void> {
-    if (!this.state.isListening) {
-      console.log('[AudioStreamProcessor] Not currently listening');
-      return;
-    }
+    if (!this.state.isListening) return;
 
     try {
       // Stop system audio capture if active
@@ -192,7 +174,6 @@ export class AudioStreamProcessor extends EventEmitter {
       this.clearQuestions();
       
       this.emit('state-changed', { ...this.state });
-      console.log('[AudioStreamProcessor] Stopped listening');
       
     } catch (error) {
       console.error('[AudioStreamProcessor] Error stopping listening:', error);
@@ -204,14 +185,9 @@ export class AudioStreamProcessor extends EventEmitter {
    * Process audio data chunk received from renderer
    */
   public async processAudioChunk(audioData: Buffer): Promise<void> {
-    if (!this.state.isListening) {
-      console.log('[AudioStreamProcessor] Not listening, ignoring audio chunk');
-      return;
-    }
+    if (!this.state.isListening) return;
 
     try {
-      console.log('[AudioStreamProcessor] Processing audio chunk of size:', audioData.length);
-      
       // Convert Buffer to Float32Array
       const float32Array = new Float32Array(audioData.length / 2);
       for (let i = 0; i < float32Array.length; i++) {
@@ -230,10 +206,7 @@ export class AudioStreamProcessor extends EventEmitter {
       }
       
       // Check if we should create a chunk based on duration or word count
-      const shouldCreateChunk = await this.shouldCreateChunk();
-      
-      if (shouldCreateChunk) {
-        console.log('[AudioStreamProcessor] Creating and processing chunk');
+      if (await this.shouldCreateChunk()) {
         await this.createAndProcessChunk();
       }
       
@@ -250,32 +223,20 @@ export class AudioStreamProcessor extends EventEmitter {
    */
   private async shouldCreateChunk(): Promise<boolean> {
     const now = Date.now();
-    
-    // Calculate time since last chunk
     const timeSinceLastChunk = now - this.lastChunkTime;
-    
-    // Calculate accumulated audio duration (assuming 16kHz sample rate)
     const accumulatedDuration = (this.accumulatedSamples / this.config.sampleRate) * 1000;
     
-    // ULTRA AGGRESSIVE: Create chunk if:
-    // 1. We have accumulated 2+ seconds of audio (reduced from 5s) OR
-    // 2. We haven't created a chunk in 4+ seconds (reduced from 10s) OR  
+    // OPTIMIZED: Create chunk if:
+    // 1. We have accumulated 800ms+ of audio OR
+    // 2. We haven't created a chunk in 1.5+ seconds OR  
     // 3. Word count exceeds limit OR
     // 4. We detect potential question markers in recent audio
-    const shouldCreateByDuration = accumulatedDuration >= 2000; // 2s instead of 5s
-    const shouldCreateByTime = timeSinceLastChunk >= 4000; // 4s instead of 10s
+    const shouldCreateByDuration = accumulatedDuration >= 800;
+    const shouldCreateByTime = timeSinceLastChunk >= 1500;
     const shouldCreateByWords = this.wordCount >= this.config.maxWords;
-    
-    // Use streaming detector for question hint
     const shouldCreateByQuestionHint = this.streamingDetector.hasRecentQuestionActivity();
     
-    const shouldCreate = shouldCreateByDuration || shouldCreateByTime || shouldCreateByWords || shouldCreateByQuestionHint;
-    
-    if (shouldCreate) {
-      console.log('[AudioStreamProcessor] Creating chunk - Duration:', accumulatedDuration.toFixed(0), 'ms, Time since last:', timeSinceLastChunk.toFixed(0), 'ms, Words:', this.wordCount, 'QuestionHint:', shouldCreateByQuestionHint);
-    }
-    
-    return shouldCreate;
+    return shouldCreateByDuration || shouldCreateByTime || shouldCreateByWords || shouldCreateByQuestionHint;
   }
 
   /**
@@ -326,10 +287,7 @@ export class AudioStreamProcessor extends EventEmitter {
    * Transcribe audio chunk using OpenAI Whisper
    */
   private async transcribeChunk(chunk: AudioChunk): Promise<void> {
-    if (!this.config.questionDetectionEnabled) {
-      console.log('[AudioStreamProcessor] Question detection disabled, skipping transcription');
-      return;
-    }
+    if (!this.config.questionDetectionEnabled) return;
 
     try {
       this.state.isProcessing = true;
@@ -346,7 +304,6 @@ export class AudioStreamProcessor extends EventEmitter {
       // Check for streaming question detection
       const hasStreamingQuestion = this.streamingDetector.checkForStreamingQuestion(result.text);
       if (hasStreamingQuestion && this.currentAudioData.length > 0) {
-        console.log('[AudioStreamProcessor] Triggering immediate chunk processing due to streaming question detection');
         this.createAndProcessChunk().catch(error => {
           console.error('[AudioStreamProcessor] Error in streaming-triggered chunk processing:', error);
         });
@@ -354,10 +311,7 @@ export class AudioStreamProcessor extends EventEmitter {
 
       // Detect and immediately refine questions
       if (result.text.trim()) {
-        console.log('[AudioStreamProcessor] Processing transcription for questions:', result.text);
         await this.detectAndRefineQuestions(result);
-      } else {
-        console.log('[AudioStreamProcessor] No text in transcription result');
       }
 
     } catch (error) {
@@ -381,7 +335,6 @@ export class AudioStreamProcessor extends EventEmitter {
       for (const question of refinedQuestions) {
         this.state.questionBuffer.push(question);
         this.emit('question-detected', question);
-        console.log(`[AudioStreamProcessor] Question emitted: "${question.text}"`);
       }
 
       // Emit state change if we added any questions
@@ -447,8 +400,6 @@ export class AudioStreamProcessor extends EventEmitter {
    * Switch to a different audio source
    */
   public async switchAudioSource(sourceId: string): Promise<void> {
-    console.log('[AudioStreamProcessor] Switching to audio source:', sourceId);
-    
     const wasListening = this.state.isListening;
     const previousSource = this.state.currentAudioSource;
     
@@ -463,22 +414,17 @@ export class AudioStreamProcessor extends EventEmitter {
         try {
           await this.startListening(sourceId);
         } catch (switchError) {
-          console.warn('[AudioStreamProcessor] Failed to switch to new source, attempting fallback:', switchError);
-          
           // Try to restore previous source
           if (previousSource && previousSource.id !== sourceId) {
             try {
-              console.log('[AudioStreamProcessor] Attempting to restore previous source:', previousSource.name);
               await this.startListening(previousSource.id);
               this.emit('error', new Error(`Failed to switch to ${sourceId}, restored ${previousSource.name}: ${(switchError as Error).message}`));
             } catch (restoreError) {
-              console.error('[AudioStreamProcessor] Failed to restore previous source:', restoreError);
               // Final fallback to microphone
               try {
                 await this.startListening('microphone');
                 this.emit('error', new Error(`Audio source switch failed, using microphone fallback: ${(switchError as Error).message}`));
               } catch (micError) {
-                console.error('[AudioStreamProcessor] All audio sources failed:', micError);
                 throw new Error(`All audio sources failed: ${(micError as Error).message}`);
               }
             }
@@ -499,7 +445,6 @@ export class AudioStreamProcessor extends EventEmitter {
         }
       }
       
-      console.log('[AudioStreamProcessor] Successfully switched to:', sourceId);
     } catch (error) {
       console.error('[AudioStreamProcessor] Failed to switch audio source:', error);
       this.emit('error', error as Error);
@@ -553,7 +498,6 @@ export class AudioStreamProcessor extends EventEmitter {
     this.systemAudioCapture.on('source-changed', (source: AudioSource) => {
       this.state.currentAudioSource = source;
       this.emit('state-changed', { ...this.state });
-      console.log('[AudioStreamProcessor] Audio source changed to:', source.name);
     });
 
     this.systemAudioCapture.on('error', (error: Error) => {

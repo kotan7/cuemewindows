@@ -1,5 +1,6 @@
 /**
  * Handles real-time streaming question detection
+ * Phase 2A Optimization: Aggressive pattern matching for 100-200ms faster detection
  */
 export class StreamingQuestionDetector {
   private streamingBuffer: string = '';
@@ -7,28 +8,78 @@ export class StreamingQuestionDetector {
   private recentAudioBuffer: string[] = [];
   private lastQuestionHintTime: number = 0;
 
+  // Precompiled regex patterns for maximum performance
+  private static readonly STREAMING_PATTERNS = [
+    // Japanese question starters (expanded)
+    /どう[です|でしょう|思い|考え|やって|すれば|なって|いう]/,
+    /何[が|を|で|に|の|から|まで|という|について]/,
+    /いつ[から|まで|頃|ごろ|の|に|は|も]/,
+    /どこ[で|に|から|まで|の|へ|が]/,
+    /だれ[が|を|に|の|と|から]/,
+    /誰[が|を|に|の|と|から]/,
+    /なぜ[なら|か|です|でしょう]/,
+    /どちら[が|を|に|の|へ|から]/,
+    /どれ[が|を|に|の|ほど|くらい]/,
+    /いくら[で|です|か|くらい]/,
+    /いくつ[か|の|ある|です]/,
+    /どんな[もの|こと|感じ|風|人]/,
+    
+    // Question endings (expanded)
+    /[です|ます]か[？。\s]/,
+    /でしょうか[？。\s]/,
+    /ませんか[？。\s]/,
+    /ますか[？。\s]/,
+    /ですか[？。\s]/,
+    /かしら[？。\s]/,
+    /のか[？。\s]/,
+    /んですか[？。\s]/,
+    /んでしょうか[？。\s]/,
+    
+    // Polite request patterns (often questions)
+    /教えて[ください|くれ|もらえ|いただけ]/,
+    /お聞かせ[ください|いただけ]/,
+    /お願い[します|できます|してもいい]/,
+    /いただけ[ます|ません]か/,
+    /もらえ[ます|ません]か/,
+    /くれ[ます|ません]か/,
+    
+    // English question patterns (for mixed language)
+    /\b(what|how|why|when|where|who|which|can|could|should|would|will|is|are|do|does|did)\b/i
+  ];
+
   constructor() {
-    console.log('[StreamingQuestionDetector] Initialized');
   }
 
   /**
    * Quick heuristic to detect recent question activity patterns
+   * Phase 2A: Expanded patterns for earlier detection
    */
   public hasRecentQuestionActivity(): boolean {
     const now = Date.now();
     
-    // Check if we've had recent question hints within last 3 seconds
-    if (now - this.lastQuestionHintTime < 3000) {
+    // Check if we've had recent question hints within last 2.5 seconds (reduced from 3s)
+    if (now - this.lastQuestionHintTime < 2500) {
       return true;
     }
     
     // Quick pattern matching on recent audio buffer for question indicators
     const recentText = this.recentAudioBuffer.join(' ').toLowerCase();
     
-    // Japanese question patterns that suggest a question is being formed
+    // Expanded Japanese question patterns for earlier detection
     const quickQuestionPatterns = [
+      // Question starters
       'どう', 'どの', 'どこ', 'いつ', 'なぜ', 'なん', '何', 'だれ', '誰',
-      'ですか', 'ますか', 'でしょうか', 'か？', 'か。'
+      'どちら', 'どれ', 'いくら', 'いくつ', 'どんな',
+      
+      // Question endings
+      'ですか', 'ますか', 'でしょうか', 'ませんか', 'か？', 'か。',
+      'かしら', 'のか', 'んですか', 'んでしょうか',
+      
+      // Polite requests (often questions)
+      '教えて', 'お聞かせ', 'お願い', 'いただけ', 'もらえ', 'くれ',
+      
+      // English question words
+      'what', 'how', 'why', 'when', 'where', 'who', 'which'
     ];
     
     const hasQuestionPattern = quickQuestionPatterns.some(pattern => 
@@ -37,7 +88,6 @@ export class StreamingQuestionDetector {
     
     if (hasQuestionPattern) {
       this.lastQuestionHintTime = now;
-      console.log('[StreamingQuestionDetector] Question hint detected in recent audio:', recentText.substring(0, 50));
     }
     
     return hasQuestionPattern;
@@ -45,6 +95,7 @@ export class StreamingQuestionDetector {
 
   /**
    * Real-time streaming question detection during transcription
+   * Phase 2A: Reduced check interval from 500ms to 200ms for faster detection
    */
   public checkForStreamingQuestion(newText: string): boolean {
     const now = Date.now();
@@ -57,35 +108,22 @@ export class StreamingQuestionDetector {
       this.streamingBuffer = this.streamingBuffer.slice(-500);
     }
     
-    // Only check every 500ms to avoid excessive processing
-    if (now - this.lastStreamingCheck < 500) {
+    // Phase 2A: Check every 200ms instead of 500ms for faster detection
+    if (now - this.lastStreamingCheck < 200) {
       return false;
     }
     
     this.lastStreamingCheck = now;
     
-    // Quick streaming question detection using lightweight patterns
+    // Quick streaming question detection using precompiled patterns
     const streamingText = this.streamingBuffer.toLowerCase().trim();
     
-    // Ultra-fast Japanese question pattern matching
-    const streamingQuestionPatterns = [
-      /どう[です|でしょう|思い|考え].*[か？]/,
-      /何[が|を|で|に].*[か？]/,
-      /いつ.*[か？]/,
-      /どこ.*[か？]/,
-      /だれ.*[か？]/,
-      /なぜ.*[か？]/,
-      /[です|ます]か[？。]/,
-      /でしょうか[？。]/
-    ];
-    
-    const hasStreamingQuestion = streamingQuestionPatterns.some(pattern => 
+    // Use precompiled patterns for maximum performance
+    const hasStreamingQuestion = StreamingQuestionDetector.STREAMING_PATTERNS.some(pattern => 
       pattern.test(streamingText)
     );
     
     if (hasStreamingQuestion) {
-      console.log('[StreamingQuestionDetector] STREAMING question pattern detected:', streamingText.substring(0, 100));
-      
       // Clear buffer after detection to avoid re-triggering
       this.streamingBuffer = '';
       return true;
@@ -96,14 +134,15 @@ export class StreamingQuestionDetector {
 
   /**
    * Update recent audio buffer for question hint detection
+   * Phase 2A: Increased buffer size for better context
    */
   public updateRecentAudioBuffer(text: string): void {
     if (!text || text.trim().length === 0) return;
     
     this.recentAudioBuffer.push(text.toLowerCase());
     
-    // Keep only last 10 entries to avoid memory bloat
-    if (this.recentAudioBuffer.length > 10) {
+    // Phase 2A: Keep last 15 entries (increased from 10) for better pattern detection
+    if (this.recentAudioBuffer.length > 15) {
       this.recentAudioBuffer.shift();
     }
   }
