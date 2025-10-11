@@ -289,10 +289,11 @@ npm run watch            # Watch TypeScript changes
 
 ### Security
 - API keys stored in .env, never exposed to renderer
-- Supabase handles authentication
-- Tokens stored securely using TokenStorage
+- Supabase handles authentication with persistent sessions (60-day token storage)
+- Tokens stored securely using TokenStorage with AES-256-GCM encryption
 - Row Level Security (RLS) in database
 - Input validation on all IPC handlers
+- Automatic session restoration on app restart
 
 ---
 
@@ -377,7 +378,9 @@ npm run app:build
 **Authentication Failing:**
 - Verify Supabase credentials in .env
 - Check network connection
-- Clear token storage: Delete `~/Library/Application Support/CueMe/tokens.json`
+- Clear token storage: Delete `~/Library/Application Support/CueMe/auth-tokens.json`
+- Check logs for session restoration errors
+- Use `auth-debug-info` IPC handler to check auth state
 
 **App Won't Start:**
 - Check for port conflicts (5173, 3001)
@@ -425,6 +428,7 @@ npm run app:build
 - [Architecture Overview](.agent/system/ARCHITECTURE.md)
 - [Component Map](.agent/system/COMPONENT_MAP.md)
 - [Code Restructure Plan](.agent/tasks/CODE_RESTRUCTURE.md)
+- [Persistent Authentication](.agent/tasks/PERSISTENT_AUTH.md) - ✅ Completed
 - [Agent Rules](.agent/rule.MD)
 
 ---

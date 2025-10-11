@@ -301,7 +301,7 @@ export class DeepLinkHandler {
   /**
    * Set authentication session in Supabase
    */
-  private setAuthSession(accessToken: string, refreshToken: string): void {
+  private async setAuthSession(accessToken: string, refreshToken: string): Promise<void> {
     console.log('[DeepLink] Setting session in Supabase...');
     
     const currentAuthState = this.appState.authService.getAuthState();
@@ -311,11 +311,13 @@ export class DeepLinkHandler {
     
     const supabase = this.appState.authService.getSupabaseClient();
     
-    console.log('[DeepLink] Calling supabase.auth.setSession...');
-    supabase.auth.setSession({
-      access_token: accessToken,
-      refresh_token: refreshToken
-    }).then(({ data, error }) => {
+    try {
+      console.log('[DeepLink] Calling supabase.auth.setSession...');
+      const { data, error } = await supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken
+      });
+      
       if (error) {
         console.error('[DeepLink] ❌ Error setting session:', error);
         console.error('[DeepLink] Error details:', {
@@ -323,18 +325,28 @@ export class DeepLinkHandler {
           status: error.status,
           name: error.name
         });
-      } else {
-        console.log('[DeepLink] ✅ Session set successfully!');
-        console.log('[DeepLink] Session data:');
-        console.log('[DeepLink] - user email:', data.session?.user?.email);
-        console.log('[DeepLink] - user id:', data.session?.user?.id);
-        console.log('[DeepLink] - expires at:', data.session?.expires_at);
-        
-        this.focusWindowAfterAuth();
+        return;
       }
-    }).catch((err) => {
+      
+      console.log('[DeepLink] ✅ Session set successfully!');
+      console.log('[DeepLink] Session data:');
+      console.log('[DeepLink] - user email:', data.session?.user?.email);
+      console.log('[DeepLink] - user id:', data.session?.user?.id);
+      console.log('[DeepLink] - expires at:', data.session?.expires_at);
+      
+      // Explicitly store tokens as backup (in case onAuthStateChange event doesn't fire)
+      if (data.session?.refresh_token && data.session?.user?.id) {
+        console.log('[DeepLink] Explicitly storing refresh token as backup...');
+        await this.appState.authService.storeRefreshToken(
+          data.session.refresh_token,
+          data.session.user.id
+        );
+      }
+      
+      this.focusWindowAfterAuth();
+    } catch (err) {
       console.error('[DeepLink] ❌ Exception in setSession:', err);
-    });
+    }
   }
 
   /**

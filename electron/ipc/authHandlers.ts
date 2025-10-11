@@ -55,4 +55,36 @@ export function registerAuthHandlers(appState: AppState): void {
       throw error;
     }
   });
+
+  // Debug: Get detailed auth information
+  ipcMain.handle("auth-debug-info", async () => {
+    try {
+      const authState = appState.authService.getAuthState();
+      const storedTokens = await appState.authService.tokenStorage.getStoredTokens();
+      
+      return {
+        currentUser: authState.user?.email || null,
+        userId: authState.user?.id || null,
+        hasSession: !!authState.session,
+        isLoading: authState.isLoading,
+        sessionExpiresAt: authState.session?.expires_at 
+          ? new Date(authState.session.expires_at * 1000).toISOString() 
+          : null,
+        hasStoredTokens: !!storedTokens,
+        storedTokenUserId: storedTokens?.userId || null,
+        storedTokenExpiry: storedTokens?.expiresAt 
+          ? new Date(storedTokens.expiresAt).toISOString() 
+          : null,
+        isAuthenticated: appState.authService.isAuthenticated()
+      };
+    } catch (error: any) {
+      console.error("Error in auth-debug-info handler:", error);
+      return {
+        error: error.message,
+        currentUser: null,
+        hasSession: false,
+        isLoading: false
+      };
+    }
+  });
 }

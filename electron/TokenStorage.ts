@@ -25,21 +25,41 @@ export class TokenStorage {
   public async storeTokens(tokens: StoredTokens): Promise<boolean> {
     try {
       console.log('[TokenStorage] Storing tokens securely...')
+      console.log('[TokenStorage] Target file path:', this.tokenFilePath)
       
       const tokenData = JSON.stringify(tokens)
       const encryptedData = this.encrypt(tokenData)
       
       // Ensure directory exists
       const dir = path.dirname(this.tokenFilePath)
+      console.log('[TokenStorage] Directory path:', dir)
+      console.log('[TokenStorage] Directory exists:', fs.existsSync(dir))
+      
       if (!fs.existsSync(dir)) {
+        console.log('[TokenStorage] Creating directory...')
         fs.mkdirSync(dir, { recursive: true })
       }
 
-      fs.writeFileSync(this.tokenFilePath, encryptedData)
+      console.log('[TokenStorage] Writing file...')
+      fs.writeFileSync(this.tokenFilePath, encryptedData, { encoding: 'utf8', mode: 0o600 })
+      
+      // Verify file was written
+      const fileExists = fs.existsSync(this.tokenFilePath)
+      console.log('[TokenStorage] File exists after write:', fileExists)
+      
+      if (fileExists) {
+        const stats = fs.statSync(this.tokenFilePath)
+        console.log('[TokenStorage] File size:', stats.size, 'bytes')
+      }
+      
       console.log('[TokenStorage] ✅ Tokens stored successfully')
       return true
     } catch (error) {
       console.error('[TokenStorage] ❌ Error storing tokens:', error)
+      console.error('[TokenStorage] Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : 'No stack trace'
+      })
       return false
     }
   }
@@ -50,13 +70,24 @@ export class TokenStorage {
   public async getStoredTokens(): Promise<StoredTokens | null> {
     try {
       console.log('[TokenStorage] Retrieving stored tokens...')
+      console.log('[TokenStorage] Looking for file:', this.tokenFilePath)
+      console.log('[TokenStorage] File exists:', fs.existsSync(this.tokenFilePath))
       
       if (!fs.existsSync(this.tokenFilePath)) {
-        console.log('[TokenStorage] No stored tokens found')
+        console.log('[TokenStorage] No stored tokens found at expected path')
+        
+        // Check if old .dat file exists
+        const oldPath = this.tokenFilePath.replace('.json', '.dat')
+        if (fs.existsSync(oldPath)) {
+          console.log('[TokenStorage] Found old .dat file, but using new .json format')
+        }
+        
         return null
       }
 
       const encryptedData = fs.readFileSync(this.tokenFilePath, 'utf8')
+      console.log('[TokenStorage] Read encrypted data, length:', encryptedData.length)
+      
       const decryptedData = this.decrypt(encryptedData)
       const tokens: StoredTokens = JSON.parse(decryptedData)
       
@@ -67,6 +98,10 @@ export class TokenStorage {
       return tokens
     } catch (error) {
       console.error('[TokenStorage] ❌ Error retrieving tokens:', error)
+      console.error('[TokenStorage] Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : 'No stack trace'
+      })
       // If we can't decrypt, remove the corrupted file
       this.clearStoredTokens()
       return null
