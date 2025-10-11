@@ -1,6 +1,6 @@
 {
   "name": "CueMe",
-  "version": "1.0.52",
+  "version": "1.0.53",
   "main": "./dist-electron/main.js",
   "scripts": {
     "clean": "rimraf dist dist-electron",
@@ -64,8 +64,9 @@
       "gatekeeperAssess": false,
       "entitlements": "assets/entitlements.mac.plist",
       "entitlementsInherit": "assets/entitlements.mac.plist",
-      "identity": null,
-      "type": "development",
+      "notarize": {
+        "teamId": "${APPLE_TEAM_ID}"
+      },
       "extendInfo": {
         "NSMicrophoneUsageDescription": "CueMe needs microphone access to listen for questions during interviews and provide real-time assistance.",
         "NSScreenCaptureDescription": "CueMe needs screen recording permission to capture system audio from applications like Zoom for enhanced interview assistance."
