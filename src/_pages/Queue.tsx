@@ -858,11 +858,15 @@ const Queue: React.FC<QueueProps> = ({ setView, onSignOut }) => {
                   onClick={() =>
                     setIsProfileDropdownOpen(!isProfileDropdownOpen)
                   }
-                  className="w-8 h-8 rounded-full flex items-center justify-center transition-all hover:scale-110 bg-black/60 hover:bg-black/70 border border-white/25"
+                  className={`w-10 h-10 rounded-full flex items-center justify-center transition-all border border-white/25 ${
+                    isProfileDropdownOpen
+                      ? "bg-white/20 hover:bg-white/25"
+                      : "bg-black/80 hover:bg-white/15"
+                  }`}
                   type="button"
                   title="プロフィール"
                 >
-                  <User className="w-4 h-4 text-emerald-800" />
+                  <User className="w-5 h-5 text-emerald-800" />
                 </button>
 
                 {/* Profile Dropdown Menu */}
@@ -1028,9 +1032,9 @@ const Queue: React.FC<QueueProps> = ({ setView, onSignOut }) => {
                     <img
                       src="./logo.png"
                       alt="CueMe Logo"
-                      className="w-5 h-5 mx-auto mb-2"
+                      className="w-6 h-6 mx-auto mb-2"
                     />
-                    CueMeとチャット
+                    CueMeと会話
                     <br />
                     <span className="text-xs text-white/50">
                       スクリーンショットを撮る (Cmd+H) で自動分析

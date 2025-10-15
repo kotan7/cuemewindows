@@ -148,10 +148,12 @@ const QuestionSidePanel: React.FC<QuestionSidePanelProps> = ({
         </button>
       )}
       
-      {/* Two Panel Layout */}
+      {/* Dynamic Panel Layout - Single panel initially, split when question selected */}
       <div className="flex gap-2 h-full">
-        {/* Left Panel - Questions */}
-        <div className="flex-1 liquid-glass chat-container p-4 flex flex-col">
+        {/* Questions Panel - Full width when no question selected, half width when selected */}
+        <div className={`liquid-glass chat-container flex flex-col transition-all duration-300 ${
+          selectedQuestionId ? 'flex-1' : 'w-full'
+        }`}>
           <div className="flex items-center gap-2 mb-3 flex-shrink-0">
             <MessageSquare className="w-4 h-4 text-green-600" />
             <span className="text-sm font-medium text-white/90">
@@ -195,44 +197,46 @@ const QuestionSidePanel: React.FC<QuestionSidePanelProps> = ({
           </div>
         </div>
 
-        {/* Right Panel - Answer */}
-        <div className="flex-1 liquid-glass chat-container p-4 flex flex-col">
-          <div className="flex items-center gap-2 mb-3 flex-shrink-0">
-            <img src="./logo.png" alt="CueMe Logo" className="w-4 h-4" />
-            <span className="text-sm font-medium text-white/90">AI回答</span>
-          </div>
-          
-          <div className="flex-1 flex flex-col min-h-0">
-            {!selectedQuestionId ? (
-              <div className="flex-1 flex items-center justify-center">
-                <p className="text-xs text-white/50">
-                  左の質問をクリックして回答を表示
-                </p>
-              </div>
-            ) : generatingAnswer ? (
-              <div className="flex-1 flex items-center justify-center">
-                <div className="flex items-center">
-                  <span className="text-xs text-white/70 mr-2">回答を生成中</span>
-                  <div className="flex gap-0.5">
-                    <div className="w-1 h-1 bg-white/70 rounded-full animate-bounce" style={{animationDelay: '0ms'}}></div>
-                    <div className="w-1 h-1 bg-white/70 rounded-full animate-bounce" style={{animationDelay: '150ms'}}></div>
-                    <div className="w-1 h-1 bg-white/70 rounded-full animate-bounce" style={{animationDelay: '300ms'}}></div>
+        {/* Answer Panel - Only visible when question is selected */}
+        {selectedQuestionId && (
+          <div className="flex-1 liquid-glass chat-container flex flex-col transition-all duration-300">
+            <div className="flex items-center gap-2 mb-3 flex-shrink-0">
+              <img src="./logo.png" alt="CueMe Logo" className="w-5 h-5" />
+              <span className="text-sm font-medium text-white/90">AI回答</span>
+            </div>
+            
+            <div className="flex-1 flex flex-col min-h-0">
+              {!selectedQuestionId ? (
+                <div className="flex-1 flex items-center justify-center">
+                  <p className="text-xs text-white/50">
+                    左の質問をクリックして回答を表示
+                  </p>
+                </div>
+              ) : generatingAnswer ? (
+                <div className="flex-1 flex items-center justify-center">
+                  <div className="flex items-center">
+                    <span className="text-xs text-white/70 mr-2">回答を生成中</span>
+                    <div className="flex gap-0.5">
+                      <div className="w-1 h-1 bg-white/70 rounded-full animate-bounce" style={{animationDelay: '0ms'}}></div>
+                      <div className="w-1 h-1 bg-white/70 rounded-full animate-bounce" style={{animationDelay: '150ms'}}></div>
+                      <div className="w-1 h-1 bg-white/70 rounded-full animate-bounce" style={{animationDelay: '300ms'}}></div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ) : currentAnswer ? (
-              <div className="text-xs text-white/80 leading-relaxed whitespace-pre-wrap overflow-y-auto flex-1">
-                {currentAnswer}
-              </div>
-            ) : (
-              <div className="flex-1 flex items-center justify-center">
-                <p className="text-xs text-white/50">
-                  回答の生成に失敗しました
-                </p>
-              </div>
-            )}
+              ) : currentAnswer ? (
+                <div className="text-xs text-white/80 leading-relaxed whitespace-pre-wrap overflow-y-auto flex-1">
+                  {currentAnswer}
+                </div>
+              ) : (
+                <div className="flex-1 flex items-center justify-center">
+                  <p className="text-xs text-white/50">
+                    回答の生成に失敗しました
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

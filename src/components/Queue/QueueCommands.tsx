@@ -449,11 +449,11 @@ const QueueCommands = forwardRef<QueueCommandsRef, QueueCommandsProps>(
         window.electronAPI.invoke(
           "debug-log",
           "[QueueCommands] Audio track - enabled: " +
-            track.enabled +
-            ", readyState: " +
-            track.readyState +
-            ", muted: " +
-            track.muted
+          track.enabled +
+          ", readyState: " +
+          track.readyState +
+          ", muted: " +
+          track.muted
         );
 
         try {
@@ -526,7 +526,7 @@ const QueueCommands = forwardRef<QueueCommandsRef, QueueCommandsProps>(
               if (inputData instanceof Float32Array) {
                 const rms = Math.sqrt(
                   inputData.reduce((sum, sample) => sum + sample * sample, 0) /
-                    inputData.length
+                  inputData.length
                 );
                 // Note: Audio level no longer displayed in UI but useful for debugging
               }
@@ -545,7 +545,7 @@ const QueueCommands = forwardRef<QueueCommandsRef, QueueCommandsProps>(
                 window.electronAPI.invoke(
                   "debug-log",
                   "[QueueCommands] About to send chunk to backend, length: " +
-                    inputData.length
+                  inputData.length
                 );
 
                 // Ensure we have a valid Float32Array
@@ -557,7 +557,7 @@ const QueueCommands = forwardRef<QueueCommandsRef, QueueCommandsProps>(
                   window.electronAPI.invoke(
                     "debug-log",
                     "[QueueCommands] Invalid data type: " +
-                      inputData.constructor.name
+                    inputData.constructor.name
                   );
                   return;
                 }
@@ -573,7 +573,7 @@ const QueueCommands = forwardRef<QueueCommandsRef, QueueCommandsProps>(
                 window.electronAPI.invoke(
                   "debug-log",
                   "[QueueCommands] Chunk sent successfully, result: " +
-                    JSON.stringify(result)
+                  JSON.stringify(result)
                 );
               } catch (error) {
                 console.error(
@@ -600,7 +600,7 @@ const QueueCommands = forwardRef<QueueCommandsRef, QueueCommandsProps>(
           window.electronAPI.invoke(
             "debug-log",
             "[QueueCommands] AudioWorklet connected, context state: " +
-              ctx.state
+            ctx.state
           );
 
           setAudioContext(ctx);
@@ -661,7 +661,7 @@ const QueueCommands = forwardRef<QueueCommandsRef, QueueCommandsProps>(
             // Calculate audio level for visualization (still needed for internal monitoring)
             const rms = Math.sqrt(
               inputData.reduce((sum, sample) => sum + sample * sample, 0) /
-                inputData.length
+              inputData.length
             );
             // Note: Audio level no longer displayed in UI but useful for debugging
 
@@ -977,7 +977,7 @@ const QueueCommands = forwardRef<QueueCommandsRef, QueueCommandsProps>(
         if (isListening) {
           try {
             // Stop backend processor first
-            window.electronAPI.audioStreamStop().catch(() => {});
+            window.electronAPI.audioStreamStop().catch(() => { });
           } finally {
             // Always stop local capture
             stopAudioCapture();
@@ -988,9 +988,9 @@ const QueueCommands = forwardRef<QueueCommandsRef, QueueCommandsProps>(
 
     return (
       <div className="w-fit overflow-visible">
-        <div className="text-xs text-white/90 liquid-glass-bar py-2 px-3 flex items-center justify-center gap-3 draggable-area overflow-visible">
+        <div className="text-xs text-white/90 liquid-glass-bar py-2 px-3 flex items-center justify-center gap-1 draggable-area overflow-visible">
           {/* Logo */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             <img src="./logo.png" alt="CueMe Logo" className="w-4 h-4" />
           </div>
 
@@ -1002,27 +1002,24 @@ const QueueCommands = forwardRef<QueueCommandsRef, QueueCommandsProps>(
 
           {/* Solve Command */}
           {screenshots.length > 0 && (
-            <div className="flex items-center gap-2">
+            <>
               <span className="text-[11px] leading-none">Solve</span>
-              <div className="flex gap-1">
-                <button className="morphism-button px-1.5 py-1 text-[11px] leading-none text-white/70 flex items-center">
-                  <Command className="w-3 h-3" />
-                </button>
-                <button className="morphism-button px-1.5 py-1 text-[11px] leading-none text-white/70">
-                  ↵
-                </button>
-              </div>
-            </div>
+              <button className="morphism-button px-1.5 py-1 text-[11px] leading-none text-white/70 hover:text-white hover:bg-white/20 flex items-center transition-all">
+                <Command className="w-4 h-4" />
+              </button>
+              <button className="morphism-button px-1.5 py-1 text-[11px] leading-none text-white/70 hover:text-white hover:bg-white/20 transition-all">
+                ↵
+              </button>
+            </>
           )}
 
           {/* Always-On Listen Button */}
           {isAuthenticated && (
             <button
-              className={`morphism-button px-2 py-1 text-[11px] leading-none flex items-center gap-1 ${
-                isListening
-                  ? "!bg-emerald-600/70 hover:!bg-emerald-600/90 text-white"
-                  : "text-white/70 hover:text-white"
-              }`}
+              className={`glass-button text-[11px] leading-none flex items-center gap-1 ${isListening
+                ? "!bg-white/30 hover:!bg-white/40 text-white"
+                : "text-white/70 hover:text-white hover:bg-white/15"
+                }`}
               onClick={handleListenToggle}
               type="button"
               title={
@@ -1031,60 +1028,57 @@ const QueueCommands = forwardRef<QueueCommandsRef, QueueCommandsProps>(
             >
               {isListening ? (
                 <>
-                  <Mic className="w-3 h-3 mr-1" />
-                  <span className="animate-pulse">録音停止</span>
+                  <Mic className="w-4 h-4 mr-1" />
+                  <span className="animate-pulse">停止</span>
                 </>
               ) : (
                 <>
-                  <MicIcon className="w-3 h-3 mr-1" />
-                  <span>録音開始</span>
+                  <MicIcon className="w-4 h-4 mr-1" />
+                  <span>録音</span>
                 </>
               )}
             </button>
           )}
 
           {/* Chat Button */}
-          <div className="flex items-center gap-2">
-            <button
-              className="morphism-button px-2 py-1 text-[11px] leading-none text-white/70 flex items-center gap-1"
-              onClick={onChatToggle}
-              type="button"
-            >
-              <MessageCircle className="w-3 h-3 mr-1" />
-              チャット
-            </button>
-          </div>
+          <button
+            className="glass-button text-[11px] leading-none text-white/70 hover:text-white hover:bg-white/15 flex items-center gap-1"
+            onClick={onChatToggle}
+            type="button"
+          >
+            <MessageCircle className="w-4 h-4 mr-1" />
+            会話
+          </button>
 
           {/* Separator */}
-          <div className="h-4 w-px bg-white/20" />
+          <div className="h-4 w-px bg-white/20 mr-1.5" />
 
           {/* Response Mode Dropdown */}
           <div className="flex items-center gap-2">
-            <span className="text-[11px] leading-none">ファイル</span>
+            <FileText className="w-4 h-4 text-white/70" />
             <div className="relative" ref={dropdownRef}>
               <button
                 ref={triggerRef}
-                className="morphism-button px-2 py-1 text-[11px] leading-none text-white/70 flex items-center gap-1 min-w-[80px]"
+                className="morphism-button px-2 py-0 text-[11px] leading-none text-white/70 flex items-center gap-1 min-w-[80px] h-6"
                 onClick={toggleDropdown}
                 type="button"
               >
                 {responseMode.type === "plain" ? (
                   <>
-                    <Bot className="w-3 h-3" />
+                    <Bot className="w-4 h-4" />
                     <span>デフォルト</span>
                   </>
                 ) : (
                   <>
-                    <Database className="w-3 h-3" />
+                    <Database className="w-4 h-4" />
                     <span className="truncate max-w-[60px]">
                       {responseMode.collectionName || "ファイル"}
                     </span>
                   </>
                 )}
                 <ChevronDown
-                  className={`w-3 h-3 transition-transform ${
-                    isDropdownOpen ? "rotate-180" : ""
-                  }`}
+                  className={`w-4 h-4 transition-transform ${isDropdownOpen ? "rotate-180" : ""
+                    }`}
                 />
               </button>
             </div>
@@ -1166,11 +1160,10 @@ const QueueCommands = forwardRef<QueueCommandsRef, QueueCommandsProps>(
               <div className="p-1 overflow-y-auto morphism-scrollbar h-full">
                 {/* Plain Mode Option */}
                 <button
-                  className={`w-full flex items-center gap-2 px-3 py-2 text-[11px] rounded-md transition-colors ${
-                    responseMode.type === "plain"
-                      ? "bg-white/20 text-white"
-                      : "text-white/70 hover:bg-white/10 hover:text-white"
-                  }`}
+                  className={`w-full flex items-center gap-2 px-3 py-2 text-[11px] rounded-md transition-colors ${responseMode.type === "plain"
+                    ? "bg-white/20 text-white"
+                    : "text-white/70 hover:bg-white/10 hover:text-white"
+                    }`}
                   onClick={() => handleResponseModeChange({ type: "plain" })}
                 >
                   <Bot className="w-4 h-4" />
@@ -1195,12 +1188,11 @@ const QueueCommands = forwardRef<QueueCommandsRef, QueueCommandsProps>(
                     collections.map((collection) => (
                       <button
                         key={collection.id}
-                        className={`w-full flex items-center gap-2 px-3 py-2 text-[11px] rounded-md transition-colors ${
-                          responseMode.type === "qna" &&
+                        className={`w-full flex items-center gap-2 px-3 py-2 text-[11px] rounded-md transition-colors ${responseMode.type === "qna" &&
                           responseMode.collectionId === collection.id
-                            ? "bg-white/20 text-white"
-                            : "text-white/70 hover:bg-white/10 hover:text-white"
-                        }`}
+                          ? "bg-white/20 text-white"
+                          : "text-white/70 hover:bg-white/10 hover:text-white"
+                          }`}
                         onClick={() =>
                           handleResponseModeChange({
                             type: "qna",
