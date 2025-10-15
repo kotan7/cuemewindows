@@ -21,5 +21,9 @@
     <!-- Screen recording permission for system audio -->
     <key>com.apple.security.device.screen-capture</key>
     <true/>
+    <!-- Disable app sandbox to allow system audio capture -->
+    <!-- Required for ScreenCaptureKit to access system audio routing -->
+    <key>com.apple.security.app-sandbox</key>
+    <false/>
   </dict>
 </plist>

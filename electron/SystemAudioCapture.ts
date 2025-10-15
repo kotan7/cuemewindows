@@ -477,11 +477,11 @@ export class SystemAudioCapture extends EventEmitter {
             // Check for specific error types and provide helpful messages
             const errorMsg = (streamError as Error).message.toLowerCase();
             if (errorMsg.includes('permission') || errorMsg.includes('denied')) {
-              throw new Error('Screen recording permission denied. Please grant permission in System Preferences → Security & Privacy → Screen Recording.');
+              throw new Error('Screen recording permission denied. Please grant permission in System Preferences → Privacy & Security → Screen Recording, then restart CueMe to enable system audio capture.');
             } else if (errorMsg.includes('not found') || errorMsg.includes('invalid')) {
-              throw new Error('Desktop audio source not available. Try restarting the application.');
+              throw new Error('Desktop audio source not available. CueMe may need screen recording permission. Check System Preferences → Privacy & Security → Screen Recording and restart the app.');
             } else {
-              throw new Error(`System audio access failed: ${(streamError as Error).message}`);
+              throw new Error(`System audio access failed: ${(streamError as Error).message}. If this persists, verify screen recording permission is granted and restart CueMe.`);
             }
           }
           
@@ -499,11 +499,11 @@ export class SystemAudioCapture extends EventEmitter {
       // Provide more specific error messages
       const errorMsg = (error as Error).message;
       if (errorMsg.includes('permission') || errorMsg.includes('denied')) {
-        throw new Error('Screen recording permission required for system audio capture. Please check System Preferences.');
+        throw new Error('Screen recording permission required for system audio capture. Please grant permission in System Preferences → Privacy & Security → Screen Recording, then restart CueMe.');
       } else if (errorMsg.includes('not available') || errorMsg.includes('not found')) {
-        throw new Error('System audio capture not available on this device or platform.');
+        throw new Error('System audio capture not available. Ensure screen recording permission is granted in System Preferences → Privacy & Security → Screen Recording.');
       } else {
-        throw new Error(`System audio capture failed: ${errorMsg}`);
+        throw new Error(`System audio capture failed: ${errorMsg}. Verify all permissions are granted and restart CueMe.`);
       }
     }
   }

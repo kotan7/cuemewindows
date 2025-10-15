@@ -203,6 +203,42 @@ export class PermissionStorage {
   }
 
   /**
+   * Register app for screen recording to enable system audio capture
+   * This triggers macOS to add the app to System Preferences → Privacy & Security → Screen Recording
+   */
+  public async registerForScreenRecording(): Promise<boolean> {
+    if (process.platform !== 'darwin') {
+      console.log('[PermissionStorage] Screen recording registration only available on macOS')
+      return true // Assume granted on other platforms
+    }
+    
+    try {
+      console.log('[PermissionStorage] Registering app for screen recording...')
+      
+      // Import desktopCapturer dynamically to trigger registration
+      const { desktopCapturer } = require('electron')
+      
+      // Trigger desktop capturer to register the app with macOS
+      // This will cause the app to appear in System Preferences even if permission isn't granted yet
+      await desktopCapturer.getSources({
+        types: ['screen'],
+        thumbnailSize: { width: 1, height: 1 }
+      })
+      
+      console.log('[PermissionStorage] ✅ App registered for screen recording')
+      
+      // Update our stored state
+      await this.updatePermissionCheckStatus(undefined, true)
+      
+      return true
+    } catch (error) {
+      console.log('[PermissionStorage] Screen capture registration triggered (may fail if permission not granted yet):', (error as Error).message)
+      // This is expected to fail if permission not granted yet, but the app is still registered
+      return false
+    }
+  }
+
+  /**
    * Simple encryption using AES-256-GCM
    */
   private encrypt(text: string): string {

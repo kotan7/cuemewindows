@@ -56,6 +56,38 @@ async function requestMicAccess(appState: AppState): Promise<void> {
 }
 
 /**
+ * Register app for screen recording to enable system audio capture
+ */
+async function requestScreenRecordingAccess(appState: AppState): Promise<void> {
+  if (process.platform !== 'darwin') {
+    console.log('[Permission] Screen recording registration only available on macOS');
+    return;
+  }
+  
+  try {
+    console.log('[Permission] Registering for screen recording...');
+    await appState.permissionStorage.registerForScreenRecording();
+    
+    const status = await appState.permissionStorage.getCurrentPermissionStatus();
+    console.log('[Permission] Screen recording status:', status.screenCapture);
+    
+    if (status.screenCapture === 'granted') {
+      console.log('[Permission] ✅ Screen recording permission granted');
+    } else if (status.screenCapture === 'not-determined') {
+      console.log('[Permission] ⚠️  Screen recording permission not yet determined');
+      console.log('[Permission] CueMe has been registered in System Preferences → Privacy & Security → Screen Recording');
+      console.log('[Permission] Please grant permission and restart CueMe to enable system audio capture');
+    } else {
+      console.log('[Permission] ⚠️  Screen recording permission required for system audio capture');
+      console.log('[Permission] Please grant permission in System Preferences → Privacy & Security → Screen Recording');
+      console.log('[Permission] Then restart CueMe to enable system audio capture');
+    }
+  } catch (error) {
+    console.error('[Permission] Error checking screen recording permission:', error);
+  }
+}
+
+/**
  * Application initialization
  */
 async function initializeApp() {
@@ -115,6 +147,10 @@ async function initializeApp() {
     // Request microphone permission on startup
     console.log('[App Init] Requesting microphone permission...');
     await requestMicAccess(appState);
+    
+    // Register for screen recording to enable system audio capture
+    console.log('[App Init] Registering for screen recording...');
+    await requestScreenRecordingAccess(appState);
     
     console.log('[App Init] ✅ App initialization completed successfully!');
   });
