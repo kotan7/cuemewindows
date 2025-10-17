@@ -32,10 +32,15 @@ export class SystemAudioCapture extends EventEmitter {
   private processor: ScriptProcessorNode | null = null;
   private config: SystemAudioCaptureConfig;
   
-  // ScreenCaptureKit integration
+  // ScreenCaptureKit integration (macOS)
   private swiftProcess: ChildProcess | null = null;
   private swiftBinaryPath: string;
   private useScreenCaptureKit: boolean = false;
+  
+  // Windows Audio Capture integration
+  private windowsAudioCapture: any = null;
+  private windowsAudioPath: string;
+  private useWindowsAudio: boolean = false;
 
   constructor(config?: Partial<SystemAudioCaptureConfig>) {
     super();
@@ -47,16 +52,22 @@ export class SystemAudioCapture extends EventEmitter {
       ...config
     };
 
-    // Determine path to Swift binary
+    // Determine path to Swift binary (macOS)
     const isDev = !app.isPackaged;
     if (isDev) {
       this.swiftBinaryPath = path.join(process.cwd(), 'dist-native', 'SystemAudioCapture');
+      this.windowsAudioPath = path.join(process.cwd(), 'dist-native', 'WindowsAudioCapture.js');
     } else {
       this.swiftBinaryPath = path.join(process.resourcesPath, 'dist-native', 'SystemAudioCapture');
+      this.windowsAudioPath = path.join(process.resourcesPath, 'dist-native', 'WindowsAudioCapture.js');
     }
 
-    // Check if ScreenCaptureKit binary is available
-    this.checkScreenCaptureKitAvailability();
+    // Check platform-specific audio capture availability
+    if (process.platform === 'darwin') {
+      this.checkScreenCaptureKitAvailability();
+    } else if (process.platform === 'win32') {
+      this.checkWindowsAudioAvailability();
+    }
 
     console.log('[SystemAudioCapture] Initialized with config:', this.config);
     console.log('[SystemAudioCapture] Environment:', {
@@ -67,8 +78,14 @@ export class SystemAudioCapture extends EventEmitter {
       platform: process.platform,
       arch: process.arch
     });
-    console.log('[SystemAudioCapture] Swift binary path:', this.swiftBinaryPath);
-    console.log('[SystemAudioCapture] ScreenCaptureKit available:', this.useScreenCaptureKit);
+    
+    if (process.platform === 'darwin') {
+      console.log('[SystemAudioCapture] Swift binary path:', this.swiftBinaryPath);
+      console.log('[SystemAudioCapture] ScreenCaptureKit available:', this.useScreenCaptureKit);
+    } else if (process.platform === 'win32') {
+      console.log('[SystemAudioCapture] Windows audio path:', this.windowsAudioPath);
+      console.log('[SystemAudioCapture] Windows audio available:', this.useWindowsAudio);
+    }
   }
 
   /**
@@ -119,6 +136,43 @@ export class SystemAudioCapture extends EventEmitter {
       this.useScreenCaptureKit = false;
     }
   }
+  
+  /**
+   * Check if Windows audio capture is available
+   */
+  private checkWindowsAudioAvailability(): void {
+    try {
+      if (process.platform !== 'win32') {
+        console.log('[SystemAudioCapture] Windows audio only available on Windows');
+        this.useWindowsAudio = false;
+        return;
+      }
+
+      console.log('[SystemAudioCapture] Checking Windows audio at:', this.windowsAudioPath);
+      
+      if (fs.existsSync(this.windowsAudioPath)) {
+        console.log('[SystemAudioCapture] Windows audio wrapper found');
+        this.useWindowsAudio = true;
+        
+        // Lazy load the Windows audio module
+        try {
+          const WindowsAudioCapture = require(this.windowsAudioPath);
+          this.windowsAudioCapture = new WindowsAudioCapture();
+          console.log('[SystemAudioCapture] Windows audio module loaded successfully');
+        } catch (loadError) {
+          console.error('[SystemAudioCapture] Failed to load Windows audio module:', loadError);
+          this.useWindowsAudio = false;
+        }
+      } else {
+        console.log('[SystemAudioCapture] Windows audio wrapper not found at expected path');
+        console.log('[SystemAudioCapture] Using fallback audio capture method');
+        this.useWindowsAudio = false;
+      }
+    } catch (error) {
+      console.error('[SystemAudioCapture] Error checking Windows audio availability:', error);
+      this.useWindowsAudio = false;
+    }
+  }
   /**
    * Get available audio sources including system audio and microphone
    */
@@ -140,7 +194,7 @@ export class SystemAudioCapture extends EventEmitter {
       let systemAudioAvailable = false;
       let systemAudioName = 'System Audio';
 
-      if (this.useScreenCaptureKit) {
+      if (process.platform === 'darwin' && this.useScreenCaptureKit) {
         // Check ScreenCaptureKit availability
         try {
           systemAudioAvailable = await this.checkScreenCaptureKitStatus();
@@ -150,6 +204,17 @@ export class SystemAudioCapture extends EventEmitter {
           console.warn('[SystemAudioCapture] ScreenCaptureKit status check failed:', error);
           systemAudioAvailable = false;
           systemAudioName = 'System Audio (ScreenCaptureKit - Unavailable)';
+        }
+      } else if (process.platform === 'win32' && this.useWindowsAudio) {
+        // Check Windows Audio availability
+        try {
+          systemAudioAvailable = await this.windowsAudioCapture.isAvailable();
+          systemAudioName = systemAudioAvailable ? 'System Audio (Windows)' : 'System Audio (Windows - Unavailable)';
+          console.log('[SystemAudioCapture] Windows audio status check:', systemAudioAvailable);
+        } catch (error) {
+          console.warn('[SystemAudioCapture] Windows audio status check failed:', error);
+          systemAudioAvailable = false;
+          systemAudioName = 'System Audio (Windows - Unavailable)';
         }
       } else {
         // Fallback to legacy desktop capture
@@ -301,8 +366,10 @@ export class SystemAudioCapture extends EventEmitter {
       if (sourceId === 'microphone') {
         await this.startMicrophoneCapture();
       } else if (sourceId === 'system-audio') {
-        if (this.useScreenCaptureKit) {
+        if (process.platform === 'darwin' && this.useScreenCaptureKit) {
           await this.startScreenCaptureKitCapture();
+        } else if (process.platform === 'win32' && this.useWindowsAudio) {
+          await this.startWindowsAudioCapture();
         } else {
           await this.startSystemAudioCapture();
         }
@@ -334,13 +401,19 @@ export class SystemAudioCapture extends EventEmitter {
     try {
       console.log('[SystemAudioCapture] Stopping audio capture...');
       
-      // Stop ScreenCaptureKit process if running
+      // Stop ScreenCaptureKit process if running (macOS)
       if (this.swiftProcess) {
         console.log('[SystemAudioCapture] Stopping ScreenCaptureKit process...');
         this.swiftProcess.stdin?.write('stop\n');
         this.swiftProcess.stdin?.write('quit\n');
         this.swiftProcess.kill();
         this.swiftProcess = null;
+      }
+      
+      // Stop Windows audio capture if running
+      if (this.windowsAudioCapture && process.platform === 'win32') {
+        console.log('[SystemAudioCapture] Stopping Windows audio capture...');
+        await this.windowsAudioCapture.stopCapture();
       }
       
       // Clean up audio processing
@@ -605,6 +678,51 @@ export class SystemAudioCapture extends EventEmitter {
   }
 
   /**
+   * Start Windows audio capture
+   */
+  private async startWindowsAudioCapture(): Promise<void> {
+    console.log('[SystemAudioCapture] Starting Windows system audio capture...');
+    
+    if (!this.windowsAudioCapture) {
+      throw new Error('Windows audio capture module not initialized');
+    }
+
+    try {
+      // Setup event handlers for Windows audio
+      this.windowsAudioCapture.on('audio-data', (audioData: string) => {
+        try {
+          // Parse the base64 audio data
+          const audioBuffer = Buffer.from(audioData, 'base64');
+          this.emit('audio-data', audioBuffer);
+        } catch (error) {
+          console.error('[SystemAudioCapture] Error processing Windows audio data:', error);
+        }
+      });
+
+      this.windowsAudioCapture.on('error', (error: Error) => {
+        console.error('[SystemAudioCapture] Windows audio error:', error);
+        this.emit('error', error);
+      });
+
+      this.windowsAudioCapture.on('status', (status: string) => {
+        console.log(`[SystemAudioCapture] Windows audio status: ${status}`);
+      });
+
+      this.windowsAudioCapture.on('info', (info: string) => {
+        console.log(`[SystemAudioCapture] Windows audio: ${info}`);
+      });
+
+      // Start the capture
+      await this.windowsAudioCapture.startCapture();
+      console.log('[SystemAudioCapture] Windows audio capture started successfully');
+      
+    } catch (error) {
+      console.error('[SystemAudioCapture] Windows audio capture failed:', error);
+      throw new Error(`Windows audio capture failed: ${(error as Error).message}`);
+    }
+  }
+
+  /**
    * Setup audio processing pipeline for the current media stream
    */
   private async setupAudioProcessing(): Promise<void> {
@@ -805,10 +923,14 @@ export class SystemAudioCapture extends EventEmitter {
       // Note: Microphone permission testing is handled in the renderer process
       // Here we handle system audio permissions
       
-      if (this.useScreenCaptureKit) {
+      if (process.platform === 'darwin' && this.useScreenCaptureKit) {
         // Use ScreenCaptureKit permission request
         console.log('[SystemAudioCapture] Using ScreenCaptureKit permission request');
         return await this.requestScreenCaptureKitPermissions();
+      } else if (process.platform === 'win32' && this.useWindowsAudio) {
+        // Use Windows audio permission check
+        console.log('[SystemAudioCapture] Using Windows audio permission check');
+        return await this.windowsAudioCapture.requestPermissions();
       } else {
         // Fallback to legacy desktop capture permission check
         console.log('[SystemAudioCapture] Using legacy desktop capture permission check');

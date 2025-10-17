@@ -6,7 +6,7 @@
     "clean": "rimraf dist dist-electron",
     "dev": "vite",
     "build": "npm run clean && npm run build:native && tsc -p electron/tsconfig.json && vite build",
-    "build:native": "./scripts/build-native.sh",
+    "build:native": "node scripts/build-native.js",
     "preview": "vite preview",
     "electron:dev": "tsc -p electron/tsconfig.json && electron .",
     "start": "concurrently \"npm run dev\" \"wait-on http://localhost:5181 && npm run electron:dev\"",
