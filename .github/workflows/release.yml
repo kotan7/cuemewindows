@@ -1,21 +1,21 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - "v*"
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to release (e.g., v1.0.0)"
-        required: false
+        description: "Version to release (e.g., v1.0.07)"
+        required: true
+        type: string
+      title:
+        description: "Release title (e.g., Windows fixes new)"
+        required: true
         type: string
 
 permissions:
   contents: write
   actions: write
   deployments: write
-  workflows: write
 
 jobs:
   release:
@@ -34,8 +34,19 @@ jobs:
             platform: win
 
     steps:
-      - name: Check out Git repository
+      - name: Check out repository
         uses: actions/checkout@v4
+
+      # --- Auto-create tag ---
+      - name: Create version tag
+        if: matrix.os == 'ubuntu-latest' # only do this once
+        run: |
+          VERSION=${{ github.event.inputs.version }}
+          echo "Creating tag $VERSION"
+          git config user.name "${{ github.actor }}"
+          git config user.email "${{ github.actor }}@users.noreply.github.com"
+          git tag -a "$VERSION" -m "Release $VERSION"
+          git push origin "$VERSION"
 
       - name: Create .env for packaged app
         shell: bash
@@ -47,7 +58,7 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL=${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           EOF
-          echo "Created .env with keys: $(sed -n 's/=.*/=<redacted>/p' .env | xargs)"
+          echo "✅ .env created"
 
       - name: Install Node.js
         uses: actions/setup-node@v4
@@ -62,205 +73,45 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-node-
 
-      - name: Clean package manager cache
+      - name: Clean npm cache and install deps
         shell: bash
         run: |
-          echo "Cleaning package manager cache..."
-          if [ "$RUNNER_OS" == "Windows" ]; then
-            if [ -d "node_modules" ]; then
-              rm -rf node_modules || true
-            fi
-            npm cache clean --force || true
-          else
-            rm -rf node_modules || true
-            npm cache clean --force || true
-          fi
-
-      - name: Install dependencies
-        shell: bash
-        run: |
-          echo "Installing dependencies with npm..."
+          rm -rf node_modules || true
+          npm cache clean --force || true
           npm ci
 
-      - name: Install Linux dependencies
-        if: matrix.platform == 'linux'
-        run: |
-          echo "Installing Linux dependencies for Electron..."
-          sudo apt-get update
-          sudo apt-get install -y libnss3-dev libatk-bridge2.0-dev libdrm2 libxkbcommon-dev libxss1 libasound2-dev libxtst6 libatspi2.0-0 libdrm2 libxdamage1 libxrandr2 libgbm1 libxcomposite1 libxcursor1 libxi6 libgtk-3-0
-          echo "Linux dependencies installed successfully"
-
-      # Validate macOS code signing and notarization secrets
-      - name: Validate macOS secrets
-        if: matrix.platform == 'mac'
-        run: |
-          echo "Validating macOS code signing and notarization secrets..."
-          
-          # Check for code signing secrets (always required)
-          if [ -z "${{ secrets.CSC_LINK }}" ]; then
-            echo "❌ Error: CSC_LINK secret is missing"
-            echo "This should contain your .p12 certificate file (base64 encoded)"
-            exit 1
-          fi
-          
-          if [ -z "${{ secrets.CSC_KEY_PASSWORD }}" ]; then
-            echo "❌ Error: CSC_KEY_PASSWORD secret is missing"
-            echo "This should contain the password for your .p12 certificate"
-            exit 1
-          fi
-          
-          # Check for Apple API Key notarization secrets
-          if [ -z "${{ secrets.APPLE_API_KEY }}" ]; then
-            echo "❌ Error: APPLE_API_KEY secret is missing"
-            echo "This should contain your Apple API Key (.p8 file content)"
-            exit 1
-          fi
-          
-          if [ -z "${{ secrets.APPLE_API_KEY_ID }}" ]; then
-            echo "❌ Error: APPLE_API_KEY_ID secret is missing"
-            echo "This should contain your Apple API Key ID"
-            exit 1
-          fi
-          
-          if [ -z "${{ secrets.APPLE_API_ISSUER }}" ]; then
-            echo "❌ Error: APPLE_API_ISSUER secret is missing"
-            echo "This should contain your Apple API Issuer ID"
-            exit 1
-          fi
-          
-          if [ -z "${{ secrets.APPLE_TEAM_ID }}" ]; then
-            echo "❌ Error: APPLE_TEAM_ID secret is missing"
-            echo "This should contain your 10-character Apple Team ID"
-            exit 1
-          fi
-          
-          # Validate APPLE_TEAM_ID format (10 characters, alphanumeric)
-          if [[ ! "${{ secrets.APPLE_TEAM_ID }}" =~ ^[A-Z0-9]{10}$ ]]; then
-            echo "❌ Error: APPLE_TEAM_ID format is invalid"
-            echo "Expected: 10-character alphanumeric string (e.g., ABCD123456)"
-            exit 1
-          fi
-          
-          # Validate APPLE_API_KEY_ID format (10 characters, alphanumeric)
-          if [[ ! "${{ secrets.APPLE_API_KEY_ID }}" =~ ^[A-Z0-9]{10}$ ]]; then
-            echo "❌ Error: APPLE_API_KEY_ID format is invalid"
-            echo "Expected: 10-character alphanumeric string (e.g., ABCD123456)"
-            exit 1
-          fi
-          
-          echo "✅ All required macOS secrets are present and valid"
-
-      # Prepare Apple API Key file for macOS notarization
-      - name: Prepare Apple API Key
-        if: matrix.platform == 'mac'
-        run: |
-          echo "📝 Creating Apple API Key file from base64 secret..."
-          echo "${{ secrets.APPLE_API_KEY }}" | base64 --decode > /tmp/AuthKey_${{ secrets.APPLE_API_KEY_ID }}.p8
-          chmod 600 /tmp/AuthKey_${{ secrets.APPLE_API_KEY_ID }}.p8
-          echo "✅ Apple API Key file created at /tmp/AuthKey_${{ secrets.APPLE_API_KEY_ID }}.p8"
-
-      - name: Build and release Electron app
+      - name: Build Electron app
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # macOS Code Signing
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-          # macOS Notarization - Apple API Key Method (file path)
-          APPLE_API_KEY: /tmp/AuthKey_${{ secrets.APPLE_API_KEY_ID }}.p8
-          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
-          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          # Enable detailed logging for debugging
-          DEBUG: electron-builder
         run: |
-          echo "🚀 Building and releasing for platform: ${{ matrix.platform }}"
-          
-          # Run the build script
-          echo "📦 Running build script..."
+          echo "Building for ${{ matrix.platform }}"
           npm run build
-          
-          # Run electron-builder with platform-specific arguments and enhanced error handling
-          echo "🔨 Running electron-builder..."
-          
-          set +e  # Don't exit on error immediately
-          
           if [ "${{ matrix.platform }}" = "mac" ]; then
-            echo "🍎 Building for macOS with notarization..."
-            npx electron-builder --mac --publish always 2>&1 | tee build.log
-            BUILD_EXIT_CODE=${PIPESTATUS[0]}
+            npx electron-builder --mac --publish never
           elif [ "${{ matrix.platform }}" = "win" ]; then
-            echo "🪟 Building for Windows..."
-            npx electron-builder --win --publish always 2>&1 | tee build.log
-            BUILD_EXIT_CODE=${PIPESTATUS[0]}
-          elif [ "${{ matrix.platform }}" = "linux" ]; then
-            echo "🐧 Building for Linux..."
-            npx electron-builder --linux --publish always 2>&1 | tee build.log
-            BUILD_EXIT_CODE=${PIPESTATUS[0]}
+            npx electron-builder --win --publish never
+          else
+            npx electron-builder --linux --publish never
           fi
-          
-          # Check for specific notarization errors and provide helpful guidance
-          if [ $BUILD_EXIT_CODE -ne 0 ]; then
-            echo "❌ Build failed with exit code: $BUILD_EXIT_CODE"
-            
-            if [ "${{ matrix.platform }}" = "mac" ]; then
-              echo "🔍 Analyzing macOS build failure..."
-              
-              # Check for common notarization errors
-              if grep -q "HTTP status code: 403" build.log; then
-                echo "🚨 NOTARIZATION ERROR DETECTED: HTTP 403"
-                echo ""
-                echo "📋 This error typically means:"
-                echo "   1. Apple ID lacks Admin/Account Holder permissions for Team ID"
-                echo "   2. App-Specific Password is invalid or expired"
-                echo "   3. Team ID doesn't match Apple ID's accessible teams"
-                echo ""
-                echo "🔧 Troubleshooting Steps:"
-                echo "   1. Verify Apple ID has Admin role: https://developer.apple.com/account/"
-                echo "   2. Generate new App-Specific Password: https://appleid.apple.com/"
-                echo "   3. Confirm Team ID matches: Developer Account → Membership → Team ID"
-                echo "   4. Check Apple Developer Program status (not expired)"
-                echo ""
-                echo "💡 Alternative: Consider using Apple API Keys instead of Apple ID"
-              elif grep -q "notarytool" build.log; then
-                echo "🚨 NOTARIZATION TOOL ERROR DETECTED"
-                echo "Check the notarytool configuration and credentials"
-              elif grep -q "code signing" build.log; then
-                echo "🚨 CODE SIGNING ERROR DETECTED"
-                echo "Check CSC_LINK and CSC_KEY_PASSWORD secrets"
-              fi
-              
-              echo ""
-              echo "📄 Full build log available above for detailed analysis"
-            fi
-            
-            exit $BUILD_EXIT_CODE
-          fi
-          
-          set -e  # Re-enable exit on error
-          
-          echo "✅ Build and release completed successfully for ${{ matrix.platform }}"
 
-      # Clean up Apple API Key file for security
-      - name: Clean up Apple API Key
-        if: matrix.platform == 'mac' && always()
-        run: |
-          echo "🧹 Cleaning up temporary Apple API Key file..."
-          rm -f /tmp/AuthKey_${{ secrets.APPLE_API_KEY_ID }}.p8
-          echo "✅ Apple API Key file cleaned up"
-
-      - name: Debug - List build artifacts
-        shell: bash
-        run: |
-          echo "Listing release directory contents:"
-          ls -la release/ || echo "No release directory found"
-          echo "Listing all build outputs:"
-          find . -name "*.dmg" -o -name "*.zip" -o -name "*.exe" -o -name "*.AppImage" 2>/dev/null || echo "No build artifacts found"
-
+      # --- Upload artifacts ---
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
-        if: always() && hashFiles('release/**') != ''
-        continue-on-error: true
         with:
           name: release-${{ matrix.os }}
-          path: release/
+          path: dist/
+
+  # --- Create GitHub release (only once) ---
+  create-release:
+    runs-on: ubuntu-latest
+    needs: release
+    steps:
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.version }}
+          name: "${{ github.event.inputs.title }} (${{ github.event.inputs.version }})"
+          body: "Automated release generated by GitHub Actions"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
