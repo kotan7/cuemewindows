@@ -13,6 +13,9 @@ on:
 
 permissions:
   contents: write
+  actions: write
+  deployments: write
+  workflows: write
 
 jobs:
   release:

@@ -122,41 +122,67 @@ async function buildMacOS() {
 }
 
 /**
- * Build for Windows using PowerShell
+ * Build for Windows using C# and NAudio
  */
 async function buildWindows() {
   console.log('\n🪟 Building for Windows...');
   
   try {
-    const windowsAudioScript = path.join(NATIVE_DIR, 'WindowsAudioCapture.ps1');
+    const windowsAudioCs = path.join(NATIVE_DIR, 'WindowsAudioCapture.cs');
+    const windowsAudioCsproj = path.join(NATIVE_DIR, 'WindowsAudioCapture.csproj');
     const nodeWrapperScript = path.join(NATIVE_DIR, 'WindowsAudioCapture.js');
-    const outputScript = path.join(BUILD_DIR, 'WindowsAudioCapture.ps1');
+    const outputExe = path.join(BUILD_DIR, 'WindowsAudioCapture.exe');
     const outputWrapper = path.join(BUILD_DIR, 'WindowsAudioCapture.js');
     
-    // Check if source files exist
-    if (!fs.existsSync(windowsAudioScript)) {
-      console.log('📝 Creating Windows PowerShell audio capture script...');
-      // Will be created in next step
+    // Check if .NET SDK is available
+    let hasDotnet = false;
+    try {
+      execSync('dotnet --version', { stdio: 'pipe' });
+      hasDotnet = true;
+      console.log('✅ .NET SDK found');
+    } catch (error) {
+      console.warn('⚠️  .NET SDK not found - will use pre-built binary or create placeholder');
     }
     
-    if (!fs.existsSync(nodeWrapperScript)) {
-      console.log('📝 Creating Node.js wrapper for Windows audio...');
-      // Will be created in next step
+    // If .NET SDK is available and source exists, build C# exe
+    if (hasDotnet && fs.existsSync(windowsAudioCs) && fs.existsSync(windowsAudioCsproj)) {
+      console.log('🔨 Building C# WASAPI audio capture...');
+      
+      try {
+        // Build single-file executable
+        execSync(`dotnet publish "${windowsAudioCsproj}" -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:PublishTrimmed=true -o "${BUILD_DIR}"`, {
+          stdio: 'inherit',
+          cwd: NATIVE_DIR
+        });
+        
+        console.log('✅ C# executable built successfully');
+      } catch (buildError) {
+        console.warn('⚠️  C# build failed, will use fallback');
+        hasDotnet = false;
+      }
     }
     
-    // Copy scripts to build directory
-    if (fs.existsSync(windowsAudioScript)) {
-      fs.copyFileSync(windowsAudioScript, outputScript);
-      console.log('✅ PowerShell script copied');
-    }
-    
+    // Copy Node.js wrapper
     if (fs.existsSync(nodeWrapperScript)) {
       fs.copyFileSync(nodeWrapperScript, outputWrapper);
       console.log('✅ Node.js wrapper copied');
     }
     
+    // If no C# exe was built, copy PowerShell fallback
+    if (!fs.existsSync(outputExe)) {
+      const powerShellScript = path.join(NATIVE_DIR, 'WindowsAudioCapture.ps1');
+      const outputPs1 = path.join(BUILD_DIR, 'WindowsAudioCapture.ps1');
+      
+      if (fs.existsSync(powerShellScript)) {
+        fs.copyFileSync(powerShellScript, outputPs1);
+        console.log('⚠️  Using PowerShell fallback (no C# exe available)');
+      } else {
+        console.warn('⚠️  No Windows audio capture implementation found');
+      }
+    }
+    
     console.log('🎉 Windows build complete!');
-    console.log(`   Scripts location: ${BUILD_DIR}`);
+    console.log(`   Output directory: ${BUILD_DIR}`);
     
   } catch (error) {
     console.error('❌ Windows build failed:', error.message);

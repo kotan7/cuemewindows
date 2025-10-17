@@ -15,7 +15,9 @@ const fs = require('fs');
 class WindowsAudioCapture {
   constructor() {
     this.process = null;
-    this.scriptPath = this._findPowerShellScript();
+    const capture = this._findWindowsAudioCapture();
+    this.capturePath = capture.path;
+    this.captureType = capture.type;
     this.isCapturing = false;
     this.eventHandlers = {
       'audio-data': [],
@@ -26,39 +28,55 @@ class WindowsAudioCapture {
   }
 
   /**
-   * Find the PowerShell script location
+   * Find the Windows audio capture executable or script
    */
-  _findPowerShellScript() {
+  _findWindowsAudioCapture() {
     // Try different locations based on dev vs production
     const possiblePaths = [
-      path.join(__dirname, 'WindowsAudioCapture.ps1'),
-      path.join(process.cwd(), 'dist-native', 'WindowsAudioCapture.ps1'),
-      path.join(process.resourcesPath || '', 'dist-native', 'WindowsAudioCapture.ps1')
+      // C# executable (production, preferred)
+      { path: path.join(__dirname, 'WindowsAudioCapture.exe'), type: 'exe' },
+      { path: path.join(process.cwd(), 'dist-native', 'WindowsAudioCapture.exe'), type: 'exe' },
+      { path: path.join(process.resourcesPath || '', 'dist-native', 'WindowsAudioCapture.exe'), type: 'exe' },
+      // PowerShell script (fallback)
+      { path: path.join(__dirname, 'WindowsAudioCapture.ps1'), type: 'ps1' },
+      { path: path.join(process.cwd(), 'dist-native', 'WindowsAudioCapture.ps1'), type: 'ps1' },
+      { path: path.join(process.resourcesPath || '', 'dist-native', 'WindowsAudioCapture.ps1'), type: 'ps1' }
     ];
 
-    for (const scriptPath of possiblePaths) {
-      if (fs.existsSync(scriptPath)) {
-        return scriptPath;
+    for (const item of possiblePaths) {
+      if (fs.existsSync(item.path)) {
+        return item;
       }
     }
 
-    throw new Error('WindowsAudioCapture.ps1 not found');
+    throw new Error('WindowsAudioCapture executable/script not found');
   }
 
   /**
-   * Execute PowerShell command
+   * Execute Windows audio capture command
    */
-  async _executePowerShell(command, args = []) {
+  async _executeCapture(command, args = []) {
     return new Promise((resolve, reject) => {
-      const psArgs = [
-        '-ExecutionPolicy', 'Bypass',
-        '-NoProfile',
-        '-File', this.scriptPath,
-        '-Command', command,
-        ...args
-      ];
+      let processArgs;
+      let processCmd;
 
-      const process = spawn('powershell.exe', psArgs, {
+      if (this.captureType === 'exe') {
+        // Direct C# executable
+        processCmd = this.capturePath;
+        processArgs = [command, ...args];
+      } else {
+        // PowerShell script
+        processCmd = 'powershell.exe';
+        processArgs = [
+          '-ExecutionPolicy', 'Bypass',
+          '-NoProfile',
+          '-File', this.capturePath,
+          '-Command', command,
+          ...args
+        ];
+      }
+
+      const process = spawn(processCmd, processArgs, {
         stdio: ['pipe', 'pipe', 'pipe']
       });
 
@@ -142,7 +160,7 @@ class WindowsAudioCapture {
    */
   async getStatus() {
     try {
-      const status = await this._executePowerShell('status');
+      const status = await this._executeCapture('status');
       return status;
     } catch (error) {
       throw new Error(`Failed to get audio status: ${error.message}`);
@@ -166,7 +184,7 @@ class WindowsAudioCapture {
    */
   async requestPermissions() {
     try {
-      const result = await this._executePowerShell('permissions');
+      const result = await this._executeCapture('permissions');
       return result;
     } catch (error) {
       return {
@@ -185,14 +203,25 @@ class WindowsAudioCapture {
     }
 
     return new Promise((resolve, reject) => {
-      const psArgs = [
-        '-ExecutionPolicy', 'Bypass',
-        '-NoProfile',
-        '-File', this.scriptPath,
-        '-Command', 'start'
-      ];
+      let processArgs;
+      let processCmd;
 
-      this.process = spawn('powershell.exe', psArgs, {
+      if (this.captureType === 'exe') {
+        // Direct C# executable
+        processCmd = this.capturePath;
+        processArgs = ['start'];
+      } else {
+        // PowerShell script
+        processCmd = 'powershell.exe';
+        processArgs = [
+          '-ExecutionPolicy', 'Bypass',
+          '-NoProfile',
+          '-File', this.capturePath,
+          '-Command', 'start'
+        ];
+      }
+
+      this.process = spawn(processCmd, processArgs, {
         stdio: ['pipe', 'pipe', 'pipe']
       });
 
